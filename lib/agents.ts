@@ -44,7 +44,7 @@ export function withSignature(body: string, e: EventProfile) {
 // ---------- A1: discover ----------
 export async function discover(e: EventProfile, count: number, exclude: string[]) {
   const system = `You are SponsorDesk A1, the prospecting agent of a sponsorship broker for Indian college fests. ${RULES}
-Use the Crustdata tools to find companies with LIVE budget signals: funding in the last 12 months, headcount growth, campus or early-career hiring, new marketing or talent leaders, products aimed at students or founders. Prefer companies with an Indian presence. Be frugal with credits: search, do not enrich people at this stage.`;
+${hasCrustdata() ? "Use the Crustdata tools to find companies with LIVE budget signals: funding in the last 12 months, headcount growth, campus or early-career hiring, new marketing or talent leaders, products aimed at students or founders. Be frugal with credits: search, do not enrich people at this stage." : "Crustdata is NOT connected yet. Suggest well-known companies from your general knowledge that typically sponsor Indian college fests. For every signal set source to \"model_knowledge_unverified\" and date to \"unknown\". Never present a guess as a live signal."} Prefer companies with an Indian presence.`;
   const prompt = `${profileText(e)}
 
 Find ${count} candidate sponsor companies for this event, diversified across segments (hiring/employer brand, consumer brand, founder ecosystem, developer/product, CSR) and sizes. Exclude: ${exclude.join(", ") || "none"}.
