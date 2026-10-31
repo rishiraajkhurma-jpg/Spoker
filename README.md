@@ -2,7 +2,7 @@
 
 Sponsorship brokerage agents for college fests and events: find sponsors with live budget signals, write priced offers, follow up without ever double-sending, classify replies, negotiate inside the floor, draft the MOU. Humans only for exceptions. Every decision cites its reasons.
 
-Runs on Gemini (`GEMINI_API_KEY`, function calling with a built-in MCP client for Crustdata) or Claude (`ANTHROPIC_API_KEY`, Messages API MCP connector), with Crustdata for B2B company and people data.
+Runs on Claude (`ANTHROPIC_API_KEY`, Messages API MCP connector) by default, or Gemini (`GEMINI_API_KEY`, function calling with a built-in MCP client for Crustdata), with Crustdata for B2B company and people data.
 
 ## What it does
 
@@ -33,7 +33,7 @@ Tests: `scripts/test-ledger.ts` (31 checks) and `scripts/test-flows.ts` (end to 
 
 1. Import this repo in Vercel.
 2. Storage > Create Database > Neon (free). This adds `DATABASE_URL`.
-3. Environment variables: `APP_PASSWORD`, `GEMINI_API_KEY` (or `ANTHROPIC_API_KEY`), `CRUSTDATA_API_KEY`, `CRON_SECRET`, optional `SD_MODEL`, and for Gmail `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (see `.env.example`).
+3. Environment variables: `APP_PASSWORD`, `ANTHROPIC_API_KEY` (or `GEMINI_API_KEY`), `CRUSTDATA_API_KEY`, `CRON_SECRET`, optional `SD_MODEL`, and for Gmail `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (see `.env.example`).
 4. Redeploy. Open the app, log in, fill the Brief, set approvers in Settings.
 
 ### Gmail (optional, otherwise draft mode)

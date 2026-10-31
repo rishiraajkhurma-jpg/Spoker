@@ -29,3 +29,4 @@ let geminiCalls = 0; const seen: string[] = [];
   console.log(pass ? "GEMINI LOOP PASS" : "FAIL " + JSON.stringify({ text: r.text, seen, tc: r.toolCalls }));
   process.exit(pass ? 0 : 1);
 })().catch((e) => { console.error("ERROR", e); process.exit(1); });
+// provider precedence: Anthropic wins when both keys are set

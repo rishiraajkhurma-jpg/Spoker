@@ -1,7 +1,7 @@
 // LLM layer. Two providers behind one function:
 //  - Gemini (GEMINI_API_KEY): native generateContent + function calling; Crustdata tools via our own MCP client.
 //  - Claude (ANTHROPIC_API_KEY): Messages API with the remote MCP connector.
-// LLM_PROVIDER=gemini|anthropic forces one; otherwise Gemini is used when its key is present.
+// LLM_PROVIDER=gemini|anthropic forces one; otherwise Claude is used when ANTHROPIC_API_KEY is set, else Gemini.
 import { McpClient } from "./mcp";
 
 const CRUSTDATA_MCP = "https://install.crustdata.com/mcp";
@@ -10,6 +10,7 @@ export type ClaudeResult = { text: string; toolCalls: { name: string; input: any
 export function provider(): "gemini" | "anthropic" {
   const p = (process.env.LLM_PROVIDER || "").toLowerCase();
   if (p === "gemini" || p === "anthropic") return p;
+  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
   return process.env.GEMINI_API_KEY ? "gemini" : "anthropic";
 }
 export function model() {
