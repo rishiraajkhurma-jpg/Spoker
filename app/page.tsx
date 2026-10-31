@@ -7,7 +7,11 @@ type Any = any;
 async function api(path: string, body?: Any) {
   const res = await fetch(path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : { cache: "no-store" });
   const j = await res.json().catch(() => ({}));
-  if (res.status === 401) throw Object.assign(new Error("unauthorized"), { code: 401 });
+  if (res.status === 401 && path !== "/api/login") {
+    // Session missing or expired: every screen falls back to the sign-in form instead of showing an error.
+    if (typeof window !== "undefined") window.dispatchEvent(new Event("sd-signed-out"));
+    throw Object.assign(new Error("Your session ended. Please sign in again."), { code: 401 });
+  }
   if (!res.ok || j.error) throw new Error(j.error || `HTTP ${res.status}`);
   return j;
 }
@@ -88,15 +92,20 @@ export default function Page() {
 
   async function load() {
     try { setData(await api("/api/state")); setAuthed(true); }
-    catch (e: Any) { if (e.code === 401) setAuthed(false); else flash(e.message); }
+    catch (e: Any) { if (e.code !== 401) flash(e.message); }
   }
   function flash(m: string) { setToast(m); clearTimeout(toastT.current); toastT.current = setTimeout(() => setToast(""), 7000); }
   async function act(op: string, body: Any = {}, label = "", reload = true) {
     setBusy({ op, label: label || op });
     try { const r = await api("/api/act", { op, ...body }); if (reload) await load(); return r; }
-    catch (e: Any) { flash(e.message); return null; }
+    catch (e: Any) { if (e.code !== 401) flash(e.message); return null; }
     finally { setBusy(null); }
   }
+  useEffect(() => {
+    const out = () => { setAuthed(false); setData(null); setProgress(null); };
+    window.addEventListener("sd-signed-out", out);
+    return () => window.removeEventListener("sd-signed-out", out);
+  }, []);
   useEffect(() => {
     load();
     const q = new URLSearchParams(window.location.search).get("gmail");
