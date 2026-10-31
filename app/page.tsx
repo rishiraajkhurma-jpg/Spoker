@@ -810,6 +810,24 @@ function Sponsors({ data, act, busy, flash }: Any) {
 }
 
 // ---------- Settings ----------
+function Health() {
+  const [h, setH] = useState<Any>(null);
+  const [run, setRun] = useState(false);
+  const LABEL: Record<string, string> = { database: "Database", claude: "Claude", gemini: "Gemini (backup)", crustdata: "Crustdata", gmail: "Gmail" };
+  return (
+    <div className="panel">
+      <div className="spread"><div><h2>Check connections</h2><p className="sub">One tiny call to each service, so you know what works before running the agents.</p></div>
+        <button className="btn" disabled={run} onClick={() => { setRun(true); api("/api/health").then(setH).catch((e) => setH({ error: { ok: false, detail: e.message } })).finally(() => setRun(false)); }}>{run ? "Checking..." : "Check now"}</button></div>
+      {h && Object.entries(h).map(([k, v]: Any) => (
+        <div key={k} className="row" style={{ marginBottom: 6, alignItems: "flex-start" }}>
+          <span className={"chip " + (v.ok ? "good" : "bad")} style={{ minWidth: 64, justifyContent: "center" }}>{v.ok ? "working" : "failing"}</span>
+          <div><b>{LABEL[k] || k}</b><div className="small muted">{v.detail}</div></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Settings({ data, act, flash }: Any) {
   const s = data.settings;
   const [v, setV] = useState({ approvers: s.approvers, cap_new_per_day: s.cap_new_per_day, cap_total_per_day: s.cap_total_per_day, spacing_sec: s.spacing_sec, organiser_permission: s.permission });
@@ -817,6 +835,7 @@ function Settings({ data, act, flash }: Any) {
   return (
     <>
       <Head title="Settings" sub="Connections and the rules the agents cannot break." />
+      <Health />
       <div className="grid g2">
         <div className="panel">
           <h2>Connections</h2>
