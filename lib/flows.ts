@@ -378,6 +378,8 @@ export async function ingestNotes(companyId: string, notes: string) {
   if (ct?.email && g.recap?.body) {
     const q = await L.queue({ key: `${ct.id}:recap:${Date.now()}`, contact_id: ct.id, company_id: companyId, sequence: "recap", step: 1, subject: g.recap.subject || `Re: ${co.name} x ${e.name}`, body: A.withSignature(g.recap.body, e) });
     if (q.ok) await L.log("A5", companyId, "recap_drafted", "Recap email waiting for your approval");
+  } else if (g.recap?.body) {
+    await L.addException(companyId, "recap_no_email", `Recap for ${co.name} is ready, but ${ct?.full_name || "the contact"} has no email yet. Add it on the company page, then approve this.`, "Add the email, then approve to queue the recap.", g.recap.subject || `Re: ${co.name} x ${e.name}`, A.withSignature(g.recap.body, e));
   }
   for (const x of g.exceptions || []) if (x) await L.addException(companyId, "meeting_exception", `${co.name}: ${x}`, "Decide before the next touch.");
   if (g.offer_inr && g.offer_inr < e.floor_inr) {

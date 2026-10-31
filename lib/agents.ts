@@ -262,7 +262,8 @@ Sections: 1 Parties, 2 Purpose, 3 What the sponsor receives (table), 4 What the 
 // ---------- A7: sponsor update ----------
 export async function sponsorUpdate(e: EventProfile, c: any, deal: any, news: string, firstName: string) {
   const system = `You are SponsorDesk A7. You write the fortnightly update to a signed sponsor's point of contact so they feel part of the event. ${RULES}
-Structure: one-line headline number, "Since last time" (what went live for THEM, with links and numbers from the news given), "Coming up for <company>" (their next deliverable and anything we need from them, one ask max), one human line (a moment from prep). Under 120 words, no signature. Use only facts in the news and the deal. Subject: "<Event> update for <Company>: <headline>".`;
+Structure: one-line headline number, "Since last time" (only what the team news says happened; say a deliverable for them is live ONLY if the news says so), "Coming up for <company>" (their next deliverable from the deal and at most one ask), and a human line from prep ONLY if the news contains one. Under 120 words, no signature.
+Facts: use only the team news, the deal and the event profile. Do not invent anything: no links, placements, dates, anecdotes or numbers that are not written there. If the news is thin, write a shorter email. Subject: "<Event> update for <Company>: <headline>".`;
   const prompt = `${profileText(e)}\nSPONSOR: ${c.name}. Deal: ${deal?.tier || c.tier}, deliverables: ${deal?.deliverables || ""}.\nTeam news this fortnight:\n${news}\nGreet as "Hi ${firstName},". Return only <json>{"subject":"","body":""}</json>`;
   return (await claudeJson<{ subject: string; body: string }>({ system, prompt, maxTokens: 1500 })).data;
 }
