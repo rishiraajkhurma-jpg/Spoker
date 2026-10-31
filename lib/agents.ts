@@ -21,7 +21,7 @@ const RULES = `House rules (non-negotiable):
 - Indian business English, direct and polite. Amounts as INR with Indian grouping (e.g. INR 3,00,000 or 3 lakh).`;
 
 const research = () => (hasCrustdata()
-  ? "Use the Crustdata tools for company and people data. Crustdata runs in code mode: first call get_schema (or list_tools) to see the available data tools and their parameters, then call execute with a short plain JavaScript script (no type annotations) that uses `await callTool(name, params)` and returns only the fields you need. Be frugal with credits: search first, enrich only the one chosen person for a business email. Use web search for recent news."
+  ? "Use the Crustdata tools for company and people data. Crustdata runs in code mode: first call get_schema (or list_tools) to see the available data tools and their parameters, then call execute with a short plain JavaScript script (no type annotations) that uses `await callTool(name, params)` and returns only the fields you need. Crustdata also offers live web search and page fetch: use them for news, event pages and company sites, and cite the URLs. Be frugal with credits: search first, enrich only the one chosen person for a business email."
   : "Use web search. Read real pages (company site, press, news, team pages, LinkedIn public results). Cite the exact URL for each fact.");
 
 export function profileText(e: EventProfile) {
@@ -49,7 +49,7 @@ export function withSignature(body: string, e: EventProfile) {
 // ---------- A0: build the event brief from one line ----------
 export async function buildBrief(oneLine: string, sender: { name: string; title?: string; phone?: string; email?: string }) {
   const system = `You are SponsorDesk A0, the packaging agent of a sponsorship broker for Indian college fests and events. ${RULES}
-Use web search to research the event: official site, last edition's numbers (footfall, registrations, startups, speakers), past sponsors, flagship properties, social reach, dates and venue. Then design a sponsorship package.
+Research the event (Crustdata web search and page fetch if connected, otherwise web search): official site, last edition's numbers (footfall, registrations, startups, speakers), past sponsors, flagship properties, social reach, dates and venue. Then design a sponsorship package.
 Pricing: base tiers on what this event and peer fests actually charged where you can find it (cite), otherwise on comparable Indian college fests; mark them as suggestions. Floor = about 80% of the smallest cash tier. Only include numbers you found or label them "estimate".`;
   const prompt = `The manager typed: "${oneLine}"
 Return only:
@@ -61,7 +61,7 @@ Return only:
 "inkind_needs":"what the event would otherwise pay for: food, prizes, credits, internships, travel, printing",
 "models":["${MODELS.slice(0, 8).join('","')}"],"policies":"never sell judging; resume data only with opt-in",
 "postal_address":"organiser postal address with PIN if found"}</json>`;
-  const { data, raw } = await claudeJson<any>({ system, prompt, web: 8, maxTokens: 6000 });
+  const { data, raw } = await claudeJson<any>({ system, prompt, crustdata: true, web: 8, maxTokens: 6000 });
   const e: EventProfile = {
     ...data,
     tiers: (data.tiers || []).map((t: any) => ({ name: String(t.name || ""), price_inr: Number(t.price_inr || 0), deliverables: String(t.deliverables || "") })),

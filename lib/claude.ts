@@ -148,6 +148,12 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
       }
       if (![404, 429, 500, 503].includes(res!.status)) break; // quota, busy or unknown model: try a lighter model
     }
+    if ((!res || !res.ok) && tools && tools[0]?.google_search && res?.status === 429) {
+      // Search grounding has its own (often zero) free quota: answer without it rather than fail.
+      tools = undefined;
+      turn--;
+      continue;
+    }
     if (!res || !res.ok) throw new Error(`Gemini API ${res?.status}: ${errText}`);
     last = await res.json();
     const cand = last.candidates?.[0];
