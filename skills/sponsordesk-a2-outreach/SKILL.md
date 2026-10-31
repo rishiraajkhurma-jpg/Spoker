@@ -1,12 +1,12 @@
 ---
 name: sponsordesk-a2-outreach
-description: SponsorDesk agent A2. Builds the contact database for qualified sponsor companies (name, position, verified email, phone, LinkedIn URL, LinkedIn context, one-liner), picks the best channel per company, sends the first touch from the manager's Gmail, runs follow-ups that can never double-send, drafts LinkedIn connection notes for the manager to send, detects replies, notifies the manager and removes replied companies from the outreach loop. Use for any sponsor contact research, cold email, follow-up, or reply handling.
+description: SponsorDesk agent A2. Builds the contact database for qualified sponsor companies (decision makers: name, designation, department, verified professional email, business phone, verification status, evidence, relevance score), picks the best channel per company, sends the first touch from the manager's Gmail, runs follow-ups that can never double-send, detects replies, notifies the manager and removes replied companies from the outreach loop. Use for any sponsor contact research, cold email, follow-up, or reply handling.
 ---
 
 # A2 Outreach: contacts, first touch, follow-ups, replies
 
 Depth references (vendored, MIT):
-- `../third_party/coreyhaines-marketingskills/cold-email/` (frameworks, personalization, follow-up sequences, deliverability, LinkedIn outreach, reply handling)
+- `../third_party/coreyhaines-marketingskills/cold-email/` (frameworks, personalization, follow-up sequences, deliverability, reply handling)
 - `../third_party/samber-dev-event-organizer-skills/event-sponsor-outreach/` (sponsor-specific etiquette: no links or attachments in the first email, warm intro first, capped follow-ups)
 - Templates for this agent: `references/templates.md`. Channels: `references/channels.md`.
 
@@ -27,18 +27,18 @@ Rules: the primary is the **budget owner or the person who runs the budget day t
 
 ### How to find them (in order)
 1. **Warm path check first**: ask the manager's team list, past sponsor POCs, alumni in the company (Crustdata people search: company + `education: IIT Bombay`). A warm intro beats any cold email.
-2. **Crustdata MCP**: people search by company + title + seniority, then enrich for business email, LinkedIn URL, headline, recent posts. Use dry-run first; enrich only P1/P2 to save credits.
+2. **Crustdata MCP**: people search by company + title + seniority, then enrich for business email and business phone. Use dry-run first; enrich only P1/P2 to save credits.
 3. Company website (team, press, careers pages), press releases, conference speaker lists, podcasts.
 4. Email verification: Crustdata enrichment status, or a verifier (ZeroBounce/NeverBounce/Hunter verify) if the team has one. `catch_all` and `risky` are allowed only for P1 with manager approval. Never guess-and-send unverified patterns.
 5. Phone: only publicly listed business numbers. No personal numbers from scraped sources.
 
-LinkedIn data: use Crustdata or another licensed provider. Do not scrape LinkedIn with a logged-in account or a browser bot: LinkedIn's User Agreement (section 8.2) prohibits it and the manager's account can be restricted.
+Contact data: legitimate public sources only (company site and contact pages, press releases, public directories, official announcements, public bios, Crustdata). Never guess an address from a name pattern; never store a private mobile.
 
 ### Columns (write to `contacts`)
-`full_name | position | company | seniority | role_in_deal | email | email_status | phone | linkedin_url | location | one_liner | linkedin_context | personalization_hook | iitb_alum | warm_path | source | is_primary | last_verified_at`
+`full_name | position | company | seniority | role_in_deal | email | email_status | phone | location | one_liner | evidence | personalization_hook | iitb_alum | warm_path | source | is_primary | last_verified_at`
 
 - **one_liner**: one plain sentence a stranger understands: role + scope + one distinctive fact. Example: "Leads campus hiring at Groww, which grew from 1,200 to 1,700 people this year; IIT Bombay 2014 alum." No adjectives like "passionate" or "dynamic".
-- **linkedin_context**: 3-5 dated bullets the manager can use to customize: recent posts and topics, job change date, talks given, causes they post about, shared connections, college.
+- **evidence**: dated facts with source URLs that show why this person owns the decision (role, sponsorship work, announcements).
 - **personalization_hook**: the single best opener fact with its source. Prefer, in order: their own recent post or talk > company news in the last 60 days > hiring/growth signal > alumni link.
 
 Move the company to `CONTACT_READY` when a primary with a verified email exists.
@@ -49,7 +49,7 @@ Sponsors get 30+ fest pitches a month, and several IIT Bombay bodies pitch the s
 - **One live thread per company, one person at a time** (enforced in code). The backup contact is used only after the primary's thread ends with no reply, and only once.
 - **No parallel touches**: never send a referral ask, an alumni email and a cold email to the same company in the same cycle. Pick one route.
 - **Cross-fest check**: before queueing, check the institute-wide "already in conversation" sheet (Techfest, Mood Indigo, other E-Cell events, placement cell). If another IITB body is talking to that company, coordinate through them or skip. Ask the manager to set up this shared sheet if it does not exist.
-- **Route order**: warm intro (alumni / past POC) > referral ask > priced cold email. LinkedIn only as a manual complement for P1.
+- **Route order**: warm intro (alumni / past POC) > referral ask > priced cold email.
 
 ## Part 3: daily call and WhatsApp sheet (where Indian deals actually move)
 
@@ -108,15 +108,10 @@ On any human reply:
 
 Opt-outs: the code suppresses that email address permanently (also for future editions). Do not contact the company again this edition unless they reach out. Confirm the removal with a one-line reply only if the manager approves.
 
-## Part 7: LinkedIn (manager sends, agent prepares)
+## Part 7: Verification
 
-LinkedIn prohibits bots and automated sending. To protect the manager's account, A2 **prepares** and the manager **clicks**:
-- Daily LinkedIn queue (max 15-20 connection requests a day, 80-100 a week): profile URL, a note under 200 characters (no pitch, a reason to connect), and the follow-up DM to send after acceptance.
-- If the team uses a LinkedIn automation tool, that is the team's own risk decision; the skill should still cap volumes and never send identical notes.
-- When the manager reports "accepted" or pastes a DM reply, log it like an email reply.
-
-Connection note example (no pitch): "Hi Priya, saw your post on Zepto's campus ambassador results. I run sponsorships for E-Summit at IIT Bombay and would like to stay connected."
+Every email and phone carries a status: VERIFIED (published on the cited page or verified by Crustdata), CORROBORATED (source exists, domain matches, page not readable), UNVERIFIED, UNAVAILABLE or OUTDATED. An MX record proves the domain takes mail, not that the inbox exists. A company switchboard is never presented as a person's direct line. A company is ready for outreach only when the primary contact's email is VERIFIED or CORROBORATED, or a person has reviewed it.
 
 ## Daily report to the manager
 
-`New contacts: 24 (19 verified) | Offers awaiting approval: 12 | Follow-ups sent: 18 | Replies: 3 (2 interested, 1 not now) | Bounces: 1 | Call sheet: 8 | LinkedIn queue: 15 ready`
+`New contacts: 24 (19 verified) | Offers awaiting approval: 12 | Follow-ups sent: 18 | Replies: 3 (2 interested, 1 not now) | Bounces: 1 | Call sheet: 8`

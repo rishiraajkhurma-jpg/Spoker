@@ -10,7 +10,7 @@ An end-to-end sponsorship broker built from Claude skills: package, prospect, ta
 | `sponsordesk-email/` | Email agent | Every email: house style, no em/en dashes, signature, lint (`scripts/email_lint.py`), no-double-send |
 | `sponsordesk-a0-package/` | A0 | Event profile, inventory, 4 tiers, locked floor price, in-kind need list, collaboration models catalogue (cash, product, service, opportunity, hybrid) |
 | `sponsordesk-a1-prospect/` | A1 | Find companies, dual-POV fit score (our view x their marketing team's view) |
-| `sponsordesk-a2-outreach/` | A2 | Contact DB (name, title, email, phone, LinkedIn URL, context, one-liner), first touch, follow-ups, reply detection, LinkedIn queue |
+| `sponsordesk-a2-outreach/` | A2 | Decision makers (name, designation, verified email, business phone, evidence, relevance score), first touch, follow-ups, reply detection |
 | `sponsordesk-a3-scheduler/` | A3 | Meeting scheduling by email + Calendar/Meet invite, 11 templates |
 | `sponsordesk-a4-pitch/` | A4 | Company-specific 8-10 slide deck, one-pager, talk track with objections |
 | `sponsordesk-a5-meeting-followup/` | A5 | Gemini meeting notes, recap, negotiation inside the floor, post-meeting cadence |
@@ -69,7 +69,6 @@ First-time setup after install: `python sponsordesk-orchestrator/scripts/pipelin
 
 ## Honest limits
 
-- LinkedIn bans automated sending and scraping (User Agreement 8.2). A2 prepares connection notes; the manager sends them by hand.
 - Gemini meeting notes need a Google Workspace plan with Gemini, English-language meetings, and reach external guests only if the host shares with "all invited guests". A5 falls back to manual notes.
 - MOU template is not legal advice: get the institute's legal/finance office to approve the master once.
 - llm-council is an unsupported hobby project (no license file), installed from GitHub, not bundled.

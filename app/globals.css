@@ -287,3 +287,8 @@ details > summary { cursor: pointer; color: var(--indigo); font-weight: 600; fon
 .clarify ol { margin: 10px 0 12px 20px; padding: 0; line-height: 1.6; }
 .clarify textarea { width: 100%; min-height: 84px; }
 .pdf-view { display: block; width: min(1120px, 100%); height: calc(100vh - 110px); min-height: 520px; margin: 0 auto; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.dm-card .dm-actions { margin-top: 12px; flex-wrap: wrap; }
+.dm-card table.score { margin-top: 8px; width: 100%; }
+.dm-card table.score td { padding: 4px 8px 4px 0; border: 0; vertical-align: top; }
+tr.on td { background: var(--indigo-soft); }
+.dm-detail { margin-top: 4px; }

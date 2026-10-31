@@ -72,7 +72,7 @@ const STAGE_LABEL: Record<string, string> = {
   INKIND_CONFIRMED: "In-kind confirmed", NURTURE: "Nurture", DELIVERED: "Delivered", REPORTED: "Reported", RENEWAL: "Renewal",
   NO_RESPONSE: "No response", LOST: "Lost", OPTED_OUT: "Opted out", BOUNCED: "Bounced", DISQUALIFIED: "Dropped", PARKED: "Parked",
 };
-const NAV = ["Command", "Pipeline", "Outbox", "Inbox", "Contacts", "LinkedIn", "Meetings", "Deals", "Sponsors", "Settings"] as const;
+const NAV = ["Command", "Pipeline", "Decision Makers", "Outbox", "Inbox", "Contacts", "Meetings", "Deals", "Sponsors", "Settings"] as const;
 type View = (typeof NAV)[number];
 
 // ---------- app ----------
@@ -116,12 +116,14 @@ export default function Page() {
 
   const drafts = data.messages.filter((m: Any) => m.status === "drafted");
   const openEx = data.exceptions.filter((x: Any) => x.status === "open");
-  const liAll = data.contacts.filter((c: Any) => c.linkedin_note && c.linkedin_status === "to_send");
-  const counts: Record<string, Any> = { Outbox: drafts.length, Inbox: openEx.length, LinkedIn: liAll.length };
-  const approver = (data.settings.approvers || "").split(",")[0]?.trim() || "";
+  const toReview = data.contacts.filter((c: Any) => c.is_primary && !c.reviewed_at && ["UNVERIFIED", "UNAVAILABLE", "OUTDATED"].includes(c.email_status)).length;
+  const counts: Record<string, Any> = { Outbox: drafts.length + data.messages.filter((m: Any) => m.status === "needs_manual_review").length, Inbox: openEx.length, "Decision Makers": toReview };
+  const approver = data.me?.name || "";
   const liveAgent = busy ? OP_AGENT[busy.op] : progress ? (progress.label.startsWith("Scoring") ? "A1" : "A1") : "";
 
-  const ctx = { data, act, busy, flash, load, setView, open: setOpenCo, approver, progress, setProgress };
+  const me = data.me || { role: "readonly" };
+  const can = (r: string) => ({ readonly: 0, operator: 1, approver: 2, admin: 3 } as Any)[me.role] >= ({ readonly: 0, operator: 1, approver: 2, admin: 3 } as Any)[r];
+  const ctx = { data, act, busy, flash, load, setView, open: setOpenCo, approver, progress, setProgress, me, can };
 
   return (
     <div className="shell">
@@ -148,7 +150,7 @@ export default function Page() {
           })}
         </div>
         <div className="rail-foot">
-          Research: {data.settings.source === "crustdata" ? "Crustdata" : "live web search"} · {data.settings.model}<br />
+          {me.name ? <>{me.name} · {me.role}<br /></> : null}Research: {data.settings.source === "crustdata" ? "Crustdata" : "live web search"} · {data.settings.model}<br />
           <button onClick={() => api("/api/logout", {}).then(() => setAuthed(false))}>Log out</button>
         </div>
       </aside>
@@ -158,7 +160,7 @@ export default function Page() {
         {view === "Outbox" && <Outbox {...ctx} />}
         {view === "Inbox" && <Inbox {...ctx} />}
         {view === "Contacts" && <Contacts {...ctx} />}
-        {view === "LinkedIn" && <LinkedIn {...ctx} />}
+        {view === "Decision Makers" && <DecisionMakers {...ctx} />}
         {view === "Meetings" && <Meetings {...ctx} />}
         {view === "Deals" && <Deals {...ctx} />}
         {view === "Sponsors" && <Sponsors {...ctx} />}
@@ -171,14 +173,17 @@ export default function Page() {
 }
 
 function Login({ onDone }: Any) {
-  const [pw, setPw] = useState(""); const [err, setErr] = useState("");
-  async function go() { try { await api("/api/login", { password: pw }); onDone(); } catch (e: Any) { setErr(e.message); } }
+  const [pw, setPw] = useState(""); const [em, setEm] = useState(""); const [err, setErr] = useState(""); const [wait, setWait] = useState(false);
+  async function go() { setWait(true); setErr(""); try { await api("/api/login", { email: em, password: pw }); onDone(); } catch (e: Any) { setErr(e.message); } finally { setWait(false); } }
   return (
     <div className="login"><div className="panel">
       <div className="logo" style={{ color: "var(--text)", marginBottom: 14 }}><div className="logo-mark">S</div><div><b>SponsorDesk</b></div></div>
-      <label className="f" htmlFor="pw">Team password</label>
-      <input id="pw" type="password" value={pw} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === "Enter" && go()} autoFocus />
-      <div className="row" style={{ marginTop: 12 }}><button className="btn" onClick={go}>Log in</button><span className="small" style={{ color: "var(--bad)" }}>{err}</span></div>
+      <label className="f" htmlFor="em">Work email</label>
+      <input id="em" type="email" autoComplete="username" value={em} onChange={(e) => setEm(e.target.value)} autoFocus />
+      <label className="f" htmlFor="pw">Password</label>
+      <input id="pw" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === "Enter" && go()} />
+      <p className="tiny faint" style={{ margin: "6px 0 0" }}>First sign-in on a new desk: your email plus the team password creates the admin account.</p>
+      <div className="row" style={{ marginTop: 12 }}><button className="btn" disabled={wait || !em || !pw} onClick={go}>{wait ? "Signing in..." : "Sign in"}</button><span className="small" role="alert" style={{ color: "var(--bad)" }}>{err}</span></div>
     </div></div>
   );
 }
@@ -253,7 +258,7 @@ function Command({ data, act, busy, approver, progress, setProgress, flash, open
         <div className="composer">
           <div className="glyph" aria-hidden>₹</div>
           <h1>{cos.length ? "Send the desk after more sponsors." : "The floor is locked. Start the autopilot."}</h1>
-          <p>Finds companies with live budget signals, scores each from your side and theirs, finds the decision maker, writes a priced offer and a LinkedIn note. Every claim links to its source. Nothing is sent until you approve it.</p>
+          <p>Finds companies with live budget signals, scores each from your side and theirs, finds and verifies the decision makers, writes a priced offer. Every claim links to its source. Nothing is sent until you approve it.</p>
           <div className="line">
             <select value={count} onChange={(x) => setCount(Number(x.target.value))} aria-label="How many companies" style={{ background: "var(--ink-2)", color: "#fff", borderColor: "var(--ink-3)" }}>
               {[5, 8, 12, 15, 20].map((n) => <option key={n} value={n}>{n} new companies</option>)}
@@ -467,7 +472,7 @@ function Room({ data, act, busy, approver, id, close, flash, load }: Any) {
             <button className="btn ghost" onClick={close} aria-label="Close">Close</button>
           </div>
           {c.angle && <p style={{ margin: "12px 0 0", maxWidth: 640 }}>{c.angle}</p>}
-          <div className="tabs">{["Next step", "Research", "Contact", "Timeline"].map((t) => <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t}</button>)}</div>
+          <div className="tabs">{["Next step", "Research", "Decision makers", "Timeline"].map((t) => <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t}</button>)}</div>
         </div>
         <div className="drawer-body">
           {tab === "Next step" && <NextStep c={c} primary={primary} deal={deal} meets={meets} act={act} busy={busy} approver={approver} flash={flash} data={data} />}
@@ -490,7 +495,7 @@ function Room({ data, act, busy, approver, id, close, flash, load }: Any) {
               {Object.values(c.role_map || {}).some(Boolean) && <div className="panel"><h2>Who moves the money</h2><dl className="kv" style={{ marginTop: 8 }}>{Object.entries(c.role_map).filter(([, v]) => v).map(([k, v]: Any) => <><dt key={k}>{k.replace("_", " ")}</dt><dd key={k + "v"}>{v}</dd></>)}</dl></div>}
             </div>
           )}
-          {tab === "Contact" && <ContactTab contacts={contacts} act={act} busy={busy} />}
+          {tab === "Decision makers" && <ContactTab contacts={contacts} act={act} busy={busy} co={c} />}
           {tab === "Timeline" && (
             <div className="panel">
               {[...msgs.map((m: Any) => ({ t: m.sent_at || m.created_at, k: "msg", m })), ...reps.map((r: Any) => ({ t: r.received_at, k: "rep", r })), ...meets.map((m: Any) => ({ t: m.start_at || m.created_at, k: "meet", m }))]
@@ -511,33 +516,60 @@ function Room({ data, act, busy, approver, id, close, flash, load }: Any) {
   );
 }
 
-function ContactTab({ contacts, act, busy }: Any) {
-  const [mail, setMail] = useState<Record<string, string>>({});
-  if (!contacts.length) return <div className="panel"><div className="empty"><h3>No contact yet</h3>Score the company to find the decision maker.</div></div>;
+// ---------- Decision makers: shared contact card ----------
+const VLABEL: Record<string, string> = { VERIFIED: "verified", CORROBORATED: "corroborated", UNVERIFIED: "unverified", UNAVAILABLE: "not available", OUTDATED: "outdated", verified: "verified", public: "corroborated", manual: "added by you", not_found: "not available" };
+const VCLASS = (s: string) => (/^(VERIFIED|verified)$/.test(s) ? "good" : /^(UNVERIFIED|OUTDATED)$/.test(s) ? "warn" : /^(UNAVAILABLE|not_found)$/.test(s) ? "" : "stage");
+function VChip({ s }: Any) { return s ? <span className={"chip " + VCLASS(s)} title="MX records show the domain takes mail; they do not prove the inbox exists">{VLABEL[s] || String(s).toLowerCase()}</span> : null; }
+const host = (d: string) => (d || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+
+function ContactCard({ ct, co, act, busy }: Any) {
+  const [mail, setMail] = useState("");
+  const parts: Any[] = ct.relevance_parts || [];
+  const ev: Any[] = ct.evidence || [];
+  const kindLabel = ct.is_primary ? "Primary" : ct.kind === "fallback" ? "Fallback" : "Alternative";
   return (
-    <div className="grid">
-      {contacts.map((ct: Any) => (
-        <div key={ct.id} className="panel">
-          <div className="spread"><div><h2>{ct.full_name}</h2><div className="muted small">{ct.position}{ct.is_primary ? "" : " (backup)"}</div></div>{ct.iitb_alum === "yes" && <span className="chip good">IIT Bombay alum</span>}</div>
-          {ct.one_liner && <p style={{ margin: "10px 0" }}>{ct.one_liner}</p>}
-          <dl className="kv">
-            <dt>Email</dt><dd>{ct.email ? <>{ct.email} <span className={"chip " + (ct.email_status === "verified" ? "good" : "warn")}>{ct.email_status}</span></> : <span className="muted">not public</span>}{ct.email_source && /^https?:/.test(ct.email_source) && <span className="source"><a href={ct.email_source} target="_blank" rel="noreferrer">source</a></span>}</dd>
-            <dt>Phone</dt><dd>{ct.phone || <span className="muted">not public</span>}</dd>
-            <dt>LinkedIn</dt><dd>{ct.linkedin_url ? <a href={ct.linkedin_url} target="_blank" rel="noreferrer">{ct.linkedin_url.replace(/^https?:\/\/(www\.)?/, "")}</a> : <span className="muted">not found</span>}</dd>
-            <dt>Context</dt><dd>{(ct.context || []).length ? <ul style={{ margin: 0, paddingLeft: 18 }}>{ct.context.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul> : <span className="muted">none</span>}</dd>
-            <dt>Opener</dt><dd>{ct.hook || <span className="muted">none</span>}</dd>
-            <dt>Warm path</dt><dd>{ct.warm_path || <span className="muted">none known</span>}</dd>
-            <dt>Source</dt><dd>{ct.source}</dd>
-          </dl>
-          {!ct.email && ct.is_primary ? <div className="row" style={{ marginTop: 12 }}>
-            <input placeholder="Paste their work email to queue the offer" value={mail[ct.id] || ""} onChange={(e) => setMail({ ...mail, [ct.id]: e.target.value })} style={{ flex: 1, minWidth: 220 }} />
-            <button className="btn" disabled={!!busy || !mail[ct.id]} onClick={() => act("set_email", { contact_id: ct.id, email: mail[ct.id] }, "Adding the email and queuing the offer")}>Add and queue offer</button>
-          </div> : null}
-          {ct.linkedin_note && <div style={{ marginTop: 12 }}><label className="f">LinkedIn note (you send it; LinkedIn forbids bots)</label><div className="mail">{ct.linkedin_note}</div><div className="row"><button className="btn ghost" onClick={() => copy(ct.linkedin_note)}>Copy note</button>{ct.linkedin_url && <a className="btn ghost" href={ct.linkedin_url} target="_blank" rel="noreferrer">Open profile</a>}</div></div>}
-        </div>
-      ))}
+    <div className="panel dm-card">
+      <div className="spread">
+        <div><h2>{ct.full_name}</h2><div className="muted small">{[ct.position, ct.department].filter(Boolean).join(" · ")}</div></div>
+        <div className="row"><span className={"chip " + (ct.is_primary ? "p1" : "")}>{kindLabel}</span>{ct.relevance != null && <span className="chip num">relevance {ct.relevance}/100</span>}{ct.reviewed_at && <span className="chip good">reviewed by {ct.reviewed_by}</span>}</div>
+      </div>
+      {ct.reason && <p style={{ margin: "10px 0 4px" }}><b>Why this person:</b> {ct.reason}</p>}
+      {ct.responsibility && <p className="small" style={{ margin: "0 0 8px" }}><b>Sponsorship responsibility:</b> {ct.responsibility}</p>}
+      <dl className="kv">
+        <dt>Email</dt><dd>{ct.email ? <>{ct.email} <VChip s={ct.email_status} />{ct.email_type && <span className="tiny faint"> {ct.email_type}</span>}</> : <span className="muted">not available</span>}
+          {(ct.email_check || []).length > 0 && <div className="tiny faint">{ct.email_check.join(" · ")}</div>}
+          {/^https?:/.test(ct.email_source || "") && <span className="source"><a href={ct.email_source} target="_blank" rel="noreferrer">email source</a></span>}</dd>
+        <dt>Phone</dt><dd>{ct.phone ? <>{ct.phone} <VChip s={ct.phone_status} /> <span className="tiny faint">{ct.phone_type === "switchboard" ? "company switchboard, not a direct line" : ct.phone_type}</span></> : <span className="muted">not available</span>}
+          {/^https?:/.test(ct.phone_source || "") && <span className="source"><a href={ct.phone_source} target="_blank" rel="noreferrer">phone source</a></span>}</dd>
+        <dt>Discovered</dt><dd>{when(ct.discovered_at || ct.created_at) || "-"}{ct.verified_at ? `, checked ${when(ct.verified_at)}` : ""}</dd>
+        {ct.warm_path && <><dt>Warm path</dt><dd>{ct.warm_path}</dd></>}
+      </dl>
+      {parts.length > 0 && <details style={{ marginTop: 8 }}><summary>How the {ct.relevance}/100 relevance score was calculated</summary>
+        <table className="score"><tbody>{parts.map((p: Any, i: number) => <tr key={i}><td>{p.factor}</td><td className="num">{p.points}/{p.max}</td><td className="muted small">{p.why}</td></tr>)}</tbody></table></details>}
+      {(ev.length > 0 || (ct.context || []).length > 0) && <details style={{ marginTop: 6 }}><summary>Evidence ({ev.length || ct.context.length})</summary>
+        <div style={{ marginTop: 6 }}>{ev.length ? ev.map((e: Any, i: number) => <div key={i} className="small" style={{ marginBottom: 4 }}>{e.claim}{e.date ? ` (${e.date})` : ""} <a className="source" href={e.url} target="_blank" rel="noreferrer">{host(e.url)}</a></div>)
+          : (ct.context || []).map((x: string, i: number) => <div key={i} className="small">{x}</div>)}</div></details>}
+      <div className="row dm-actions">
+        {ct.email && <button className="btn ghost" onClick={() => copy(ct.email)}>Copy email</button>}
+        {ct.phone && <button className="btn ghost" onClick={() => copy(ct.phone)}>Copy phone</button>}
+        {co?.domain && <a className="btn ghost" href={`https://${host(co.domain)}`} target="_blank" rel="noreferrer">Company website</a>}
+        {!ct.is_primary && <button className="btn ghost" disabled={!!busy} onClick={() => act("set_primary", { contact_id: ct.id }, "Changing the primary contact")}>Make primary</button>}
+        {!ct.reviewed_at && <button className="btn ghost" disabled={!!busy} onClick={() => act("contact_reviewed", { contact_id: ct.id }, "Marking as reviewed")}>Mark reviewed</button>}
+        {ct.is_primary && ct.email && <button className="btn" disabled={!!busy} onClick={() => act("prepare_outreach", { company_id: ct.company_id }, "Preparing the sponsorship offer")}>Prepare outreach</button>}
+      </div>
+      {!ct.email && <div className="row" style={{ marginTop: 10 }}>
+        <input placeholder="Add their professional email" value={mail} onChange={(e) => setMail(e.target.value)} style={{ flex: 1, minWidth: 220 }} aria-label={`Email for ${ct.full_name}`} />
+        <button className="btn" disabled={!!busy || !mail} onClick={() => act("set_email", { contact_id: ct.id, email: mail }, "Checking the email").then(() => setMail(""))}>Add email</button>
+      </div>}
     </div>
   );
+}
+
+function ContactTab({ contacts, act, busy, co }: Any) {
+  if (!contacts.length) return <div className="panel"><div className="empty"><h3>No decision maker yet</h3>Score the company to find the right people.</div></div>;
+  const sorted = [...contacts].sort((a: Any, b: Any) => (b.is_primary - a.is_primary) || ((b.relevance ?? -1) - (a.relevance ?? -1)));
+  return <div className="grid">{sorted.map((ct: Any) => <ContactCard key={ct.id} ct={ct} co={co} act={act} busy={busy} />)}
+    <button className="btn ghost" disabled={!!busy} onClick={() => act("rediscover", { company_id: co.id }, `Rediscovering decision makers at ${co.name}`)}>Request rediscovery</button></div>;
 }
 
 function NextStep({ c, primary, deal, meets, act, busy, approver, data }: Any) {
@@ -556,10 +588,10 @@ function NextStep({ c, primary, deal, meets, act, busy, approver, data }: Any) {
   return (
     <div className="grid">
       {drafted.length > 0 && <div className="step-card" style={{ borderColor: "var(--indigo)" }}><h3>{drafted.length} email{drafted.length > 1 ? "s" : ""} waiting for your approval</h3><p className="small muted">Review them in the Outbox.</p></div>}
-      {c.our_pov == null && <div className="step-card"><h3>A1 · Score this company</h3><p className="small muted">Scores both sides, finds the decision maker and backup, writes the priced offer and LinkedIn note.</p><button className="btn" disabled={!!busy} onClick={() => act("analyze", { company_id: c.id }, `Scoring ${c.name}`)}>Score and find contact</button></div>}
+      {c.our_pov == null && <div className="step-card"><h3>A1 · Score this company</h3><p className="small muted">Scores both sides, finds and verifies the decision makers, writes the priced offer.</p><button className="btn" disabled={!!busy} onClick={() => act("analyze", { company_id: c.id }, `Scoring ${c.name}`)}>Score and find contact</button></div>}
       {c.our_pov != null && <div className="step-card">
         <h3>A2 · Offer and replies</h3>
-        <p className="small muted">{primary?.email ? `Offer goes to ${primary.full_name} <${primary.email}>.` : primary ? `${primary.full_name} has no public email yet: add it on the Contact tab, or send the LinkedIn note.` : "No contact yet."}</p>
+        <p className="small muted">{primary?.email ? `Offer goes to ${primary.full_name} <${primary.email}>.` : primary ? `${primary.full_name} has no verified email yet: add or review it on the Decision makers tab.` : "No contact yet."}</p>
         <div className="row">
           {primary?.email && <button className="btn ghost" disabled={!!busy} onClick={() => act("analyze", { company_id: c.id }, `Re-checking ${c.name}`)}>Re-check signals</button>}
         </div>
@@ -628,22 +660,29 @@ function NextStep({ c, primary, deal, meets, act, busy, approver, data }: Any) {
 }
 
 // ---------- Outbox ----------
-function Outbox({ data, act, busy, flash, open }: Any) {
-  const names = (data.settings.approvers || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-  const [who, setWho] = useState(names[0] || "");
+function Outbox({ data, act, busy, flash, open, can, me }: Any) {
+  const who = can("approver") ? me.name : "";
   const [edit, setEdit] = useState<Any>({});
   const coName = (id: string) => data.companies.find((c: Any) => c.id === id)?.name || id;
   const drafts = data.messages.filter((m: Any) => m.status === "drafted");
   const queued = data.messages.filter((m: Any) => ["approved", "claimed", "failed"].includes(m.status));
+  const unsure = data.messages.filter((m: Any) => ["send_unknown", "needs_manual_review"].includes(m.status));
   const sent = data.messages.filter((m: Any) => m.status === "sent").slice(0, 40);
   return (
     <>
       <Head title="Outbox" sub="Nothing reaches a sponsor until a named person approves it. Follow-ups to companies that never replied are approved automatically; anything to someone who replied always waits here.">
-        <select value={who} onChange={(e) => setWho(e.target.value)} style={{ width: 170 }} aria-label="Approver">{names.map((n: string) => <option key={n}>{n}</option>)}</select>
-        {drafts.length > 1 && <button className="btn ghost" disabled={!!busy || !who} onClick={() => act("approve_many", { keys: drafts.map((m: Any) => m.key), approver: who }, "Approving").then((r: Any) => r && flash(`Approved ${r.results.filter((x: Any) => x.ok).length} emails`))}>Approve all {drafts.length}</button>}
-        <button className="btn" disabled={!!busy} onClick={() => act("send", {}, "Sending approved emails").then((r: Any) => r && flash(`Sent ${r.sent}. ${(r.notes || []).join(" ")}`))}>Send approved now</button>
+        {!who && <span className="small muted">Your role ({me.role}) can edit drafts; an approver sends them.</span>}
+        {drafts.length > 1 && <button className="btn ghost" disabled={!!busy || !who} onClick={() => act("approve_many", { keys: drafts.map((m: Any) => m.key) }, "Approving").then((r: Any) => r && flash(`Approved ${r.results.filter((x: Any) => x.ok).length} emails`))}>Approve all {drafts.length}</button>}
+        <button className="btn" disabled={!!busy || !who} onClick={() => act("send", {}, "Sending approved emails").then((r: Any) => r && flash(`Sent ${r.sent}. ${(r.notes || []).join(" ")}`))}>Send approved now</button>
       </Head>
       {!data.settings.gmail && <div className="item attention" style={{ marginBottom: 14 }}><b>Draft mode.</b> Gmail is not connected, so approved emails wait here. Connect Google in Settings to send from your own mailbox.</div>}
+      {unsure.map((m: Any) => (
+        <div key={m.key} className="item attention">
+          <div className="spread"><div className="row"><span className="chip warn">{m.status === "send_unknown" ? "checking delivery" : "needs your check"}</span><b>{coName(m.company_id)}</b><span className="muted small">to {m.to_email}</span></div><span className="tiny faint">{ago(m.created_at)}</span></div>
+          <p className="small" style={{ margin: "6px 0" }}>Gmail may or may not have delivered "{m.subject}". It is never resent automatically. {m.status === "send_unknown" ? "The next daily cycle checks your Sent folder." : "Look in your Gmail Sent folder, then choose."}</p>
+          {who && <div className="row"><button className="btn" disabled={!!busy} onClick={() => act("delivery", { key: m.key, outcome: "sent" }, "Marking as sent")}>It was sent</button><button className="btn ghost" disabled={!!busy} onClick={() => confirm("Send it again? Only do this if it is not in your Sent folder.") && act("delivery", { key: m.key, outcome: "resend" }, "Queuing a resend")}>Not in Sent: resend</button></div>}
+        </div>
+      ))}
       {drafts.map((m: Any) => {
         const e = edit[m.key];
         return (
@@ -655,9 +694,9 @@ function Outbox({ data, act, busy, flash, open }: Any) {
               <div className="row"><button className="btn" onClick={() => act("edit", { key: m.key, ...e }, "Saving").then((r: Any) => { if (r?.ok) setEdit({ ...edit, [m.key]: null }); else if (r) flash((r.problems || [r.reason]).join("; ")); })}>Save (style is re-checked)</button><button className="btn ghost" onClick={() => setEdit({ ...edit, [m.key]: null })}>Cancel</button></div>
             </> : <><div className="mail-subject" style={{ marginTop: 8 }}>{m.subject}</div><div className="mail">{m.body}</div>
               <div className="row">
-                <button className="btn" disabled={!!busy || !who} onClick={() => act("approve", { key: m.key, approver: who }, "Approving").then((r: Any) => r && !r.ok && flash(r.reason))}>Approve</button>
+                <button className="btn" disabled={!!busy || !who} onClick={() => act("approve", { key: m.key }, "Approving").then((r: Any) => r && !r.ok && flash(r.reason))}>Approve</button>
                 <button className="btn ghost" onClick={() => setEdit({ ...edit, [m.key]: { subject: m.subject, body: m.body } })}>Edit</button>
-                <button className="btn danger" onClick={() => act("reject", { key: m.key, approver: who }, "Rejecting")}>Reject</button>
+                {who && <button className="btn danger" disabled={!!busy} onClick={() => act("reject", { key: m.key }, "Rejecting")}>Reject</button>}
               </div></>}
           </div>
         );
@@ -676,17 +715,16 @@ function Outbox({ data, act, busy, flash, open }: Any) {
 }
 
 // ---------- Inbox: exceptions + replies ----------
-function Inbox({ data, act, busy, flash, open }: Any) {
-  const names = (data.settings.approvers || "").split(",").map((s: string) => s.trim()).filter(Boolean);
-  const [who, setWho] = useState(names[0] || "");
+function Inbox({ data, act, busy, flash, open, can, me }: Any) {
+  const who = can("approver") ? me.name : "";
   const [ed, setEd] = useState<Any>({});
   const coName = (id: string) => data.companies.find((c: Any) => c.id === id)?.name || id || "General";
   const exs = data.exceptions.filter((x: Any) => x.status === "open");
-  const KIND: Record<string, string> = { below_floor: "Below your floor", no_email: "Email needed", no_contact: "No contact found", suspicious_email: "Suspicious email", reply_on_live_deal: "Reply on a live deal", unverified_email: "Unverified email", send_failed: "Send failed", meeting_exception: "From the meeting", below_floor_mou: "MOU below floor" };
+  const KIND: Record<string, string> = { below_floor: "Below your floor", no_email: "Email needed", no_contact: "No contact found", suspicious_email: "Suspicious email", reply_on_live_deal: "Reply on a live deal", unverified_email: "Unverified email", send_failed: "Send failed", meeting_exception: "From the meeting", below_floor_mou: "MOU below floor", verify_contact: "Check the contact", delivery_unknown: "Delivery uncertain", calendar_failed: "Calendar invite failed", recap_no_email: "Recap needs an email" };
   return (
     <>
       <Head title="Inbox" sub="Only the decisions a person should make: offers below your floor, exclusivity, missing emails, anything unusual. Replies from sponsors land here too.">
-        <select value={who} onChange={(e) => setWho(e.target.value)} style={{ width: 170 }} aria-label="Approver">{names.map((n: string) => <option key={n}>{n}</option>)}</select>
+        {!who && <span className="small muted">Decisions here need an approver.</span>}
         <button className="btn ghost" disabled={!!busy || !data.settings.gmail} onClick={() => act("replies", {}, "Checking Gmail for replies").then((r: Any) => r && flash(`Checked ${r.checked} threads, ${r.found} new replies`))}>Check Gmail for replies</button>
       </Head>
       {exs.map((x: Any) => {
@@ -698,8 +736,8 @@ function Inbox({ data, act, busy, flash, open }: Any) {
             {x.recommendation && <p className="small"><b>Agent recommends:</b> {x.recommendation}</p>}
             {x.draft_body && <><input value={e.subject || ""} onChange={(v) => setEd({ ...ed, [x.id]: { ...e, subject: v.target.value } })} /><textarea style={{ minHeight: 200 }} value={e.body || ""} onChange={(v) => setEd({ ...ed, [x.id]: { ...e, body: v.target.value } })} /></>}
             <div className="row" style={{ marginTop: 6 }}>
-              <button className="btn" disabled={!!busy || !who} onClick={() => act("resolve", { id: x.id, action: "approve", approver: who, note: e.note, subject: e.subject, body: e.body }, "Resolving").then((r: Any) => r && !r.ok && flash(JSON.stringify(r.queued?.problems || r.queued?.reason)))}>{x.draft_body ? "Approve and queue this email" : "Mark handled"}</button>
-              <button className="btn ghost" onClick={() => act("resolve", { id: x.id, action: "reject", approver: who, note: e.note }, "Rejecting")}>Reject</button>
+              <button className="btn" disabled={!!busy || !who} onClick={() => act("resolve", { id: x.id, action: "approve", note: e.note, subject: e.subject, body: e.body }, "Resolving").then((r: Any) => r && !r.ok && flash(JSON.stringify(r.queued?.problems || r.queued?.reason)))}>{x.draft_body ? "Approve and queue this email" : "Mark handled"}</button>
+              <button className="btn ghost" disabled={!!busy || !who} onClick={() => act("resolve", { id: x.id, action: "reject", note: e.note }, "Rejecting")}>Reject</button>
               {x.company_id && <button className="btn quiet" onClick={() => open(x.company_id)}>Open deal room</button>}
             </div>
           </div>
@@ -728,16 +766,15 @@ function Contacts({ data, open }: Any) {
       </Head>
       <div className="panel table-wrap" style={{ padding: 0 }}>
         <table>
-          <thead><tr><th>Name</th><th>Company</th><th>Position</th><th>Email</th><th>Phone</th><th>LinkedIn</th><th>One-liner</th><th>LinkedIn context</th></tr></thead>
+          <thead><tr><th>Name</th><th>Company</th><th>Designation</th><th>Email</th><th>Phone</th><th>Relevance</th><th>One-liner</th></tr></thead>
           <tbody>{rows.map((c: Any) => (
             <tr key={c.id} className="click" onClick={() => open(c.company_id)}>
-              <td><b>{c.full_name}</b>{c.iitb_alum === "yes" && <div><span className="chip good">IITB alum</span></div>}{!c.is_primary && <div className="tiny faint">backup</div>}</td>
+              <td><b>{c.full_name}</b>{c.iitb_alum === "yes" && <div><span className="chip good">IITB alum</span></div>}{!c.is_primary && <div className="tiny faint">{c.kind === "fallback" ? "fallback" : "alternative"}</div>}</td>
               <td>{coName(c.company_id)}</td><td>{c.position}</td>
-              <td>{c.email || <span className="faint">not public</span>}{c.email && <div className="tiny faint">{c.email_status}</div>}</td>
-              <td>{c.phone || <span className="faint">-</span>}</td>
-              <td>{c.linkedin_url ? <a href={c.linkedin_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>profile</a> : <span className="faint">-</span>}</td>
-              <td style={{ maxWidth: 280 }}>{c.one_liner}</td>
-              <td style={{ maxWidth: 300 }} className="small">{(c.context || []).slice(0, 3).join(" · ")}</td>
+              <td>{c.email || <span className="faint">not available</span>}{c.email && <div><VChip s={c.email_status} /></div>}</td>
+              <td>{c.phone || <span className="faint">-</span>}{c.phone && <div className="tiny faint">{c.phone_type === "switchboard" ? "switchboard" : c.phone_type}</div>}</td>
+              <td className="num">{c.relevance ?? "-"}</td>
+              <td style={{ maxWidth: 300 }}>{c.one_liner}</td>
             </tr>
           ))}</tbody>
         </table>
@@ -747,31 +784,46 @@ function Contacts({ data, open }: Any) {
   );
 }
 
-// ---------- LinkedIn queue ----------
-function LinkedIn({ data, act, open }: Any) {
-  const coName = (id: string) => data.companies.find((c: Any) => c.id === id)?.name || id;
-  const rows = data.contacts.filter((c: Any) => c.linkedin_note);
-  const sentToday = rows.filter((c: Any) => c.linkedin_status !== "to_send").length;
+// ---------- Decision Makers ----------
+function DecisionMakers({ data, act, busy, open }: Any) {
+  const [sel, setSel] = useState<string>("");
+  const [q, setQ] = useState("");
+  const byCo: Record<string, Any[]> = {};
+  for (const c of data.contacts) (byCo[c.company_id] ||= []).push(c);
+  const rows = data.companies.filter((co: Any) => byCo[co.id]?.length && (!q || (co.name + JSON.stringify(byCo[co.id])).toLowerCase().includes(q.toLowerCase())));
+  const pick = (co: Any) => byCo[co.id].find((c: Any) => c.is_primary) || byCo[co.id][0];
+  const cur = rows.find((co: Any) => co.id === sel);
   return (
     <>
-      <Head title="LinkedIn queue" sub="LinkedIn forbids automated sending, so the agent writes the note and you click send. Keep it to about 15 to 20 a day." />
-      <div className="grid g2">
-        {rows.map((c: Any) => (
-          <div key={c.id} className="item">
-            <div className="spread"><div><b>{c.full_name}</b> <span className="muted small">{c.position}, <a href="#" onClick={(e) => { e.preventDefault(); open(c.company_id); }}>{coName(c.company_id)}</a></span></div><span className={"chip " + (c.linkedin_status === "accepted" ? "good" : c.linkedin_status === "sent" ? "" : "warn")}>{c.linkedin_status === "to_send" ? "to send" : c.linkedin_status}</span></div>
-            <div className="mail">{c.linkedin_note}</div>
-            {c.linkedin_status === "accepted" && c.linkedin_dm && <><label className="f">Message after they accept</label><div className="mail">{c.linkedin_dm}</div></>}
-            <div className="row">
-              {c.linkedin_url && <a className="btn ghost" href={c.linkedin_url} target="_blank" rel="noreferrer">Open profile</a>}
-              <button className="btn ghost" onClick={() => copy(c.linkedin_status === "accepted" ? c.linkedin_dm : c.linkedin_note)}>Copy</button>
-              {c.linkedin_status === "to_send" && <button className="btn" onClick={() => act("linkedin_status", { contact_id: c.id, company_id: c.company_id, status: "sent" }, "Marking sent")}>Mark sent</button>}
-              {c.linkedin_status === "sent" && <button className="btn" onClick={() => act("linkedin_status", { contact_id: c.id, company_id: c.company_id, status: "accepted" }, "Marking accepted")}>They accepted</button>}
-            </div>
-          </div>
-        ))}
+      <Head title="Decision Makers" sub="The right person at each company, with a professional email and business phone, how each was checked, and the evidence. Nothing is guessed: a missing detail stays missing.">
+        <input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220 }} aria-label="Search decision makers" />
+        <a className="btn ghost" href="/api/export">Export CSV</a>
+      </Head>
+      <div className="panel table-wrap" style={{ padding: 0 }}>
+        <table>
+          <thead><tr><th>Company</th><th>Contact</th><th>Designation</th><th>Email</th><th>Phone</th><th>Verification</th></tr></thead>
+          <tbody>{rows.map((co: Any) => { const c = pick(co); return (
+            <tr key={co.id} className={"click" + (sel === co.id ? " on" : "")} onClick={() => setSel(sel === co.id ? "" : co.id)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && setSel(sel === co.id ? "" : co.id)}>
+              <td><b>{co.name}</b><div className="tiny faint">{STAGE_LABEL[co.stage] || co.stage}</div></td>
+              <td>{c.full_name}{byCo[co.id].length > 1 && <div className="tiny faint">+{byCo[co.id].length - 1} more</div>}</td>
+              <td>{c.position}</td>
+              <td>{c.email || <span className="faint">not available</span>}</td>
+              <td>{c.phone || <span className="faint">-</span>}{c.phone_type === "switchboard" && <div className="tiny faint">switchboard</div>}</td>
+              <td><div className="row" style={{ gap: 4 }}><VChip s={c.email_status} />{c.phone && <VChip s={c.phone_status} />}{c.reviewed_at && <span className="chip good">reviewed</span>}</div>{c.relevance != null && <div className="tiny faint">relevance {c.relevance}/100</div>}</td>
+            </tr>); })}</tbody>
+        </table>
+        {!rows.length && <div className="empty"><h3>No decision makers yet</h3>Run the autopilot, or score a company from its deal room.</div>}
       </div>
-      {!rows.length && <div className="panel"><div className="empty"><h3>No notes yet</h3>The autopilot writes one for every contact it finds.</div></div>}
-      {sentToday > 0 && <p className="small muted" style={{ marginTop: 12 }}>{sentToday} sent or accepted so far.</p>}
+      {cur && <div className="dm-detail">
+        <div className="spread" style={{ margin: "18px 0 10px" }}><h2>{cur.name}</h2><div className="row"><button className="btn quiet" onClick={() => open(cur.id)}>Open deal room</button><button className="btn ghost" disabled={!!busy} onClick={() => act("rediscover", { company_id: cur.id }, `Rediscovering decision makers at ${cur.name}`)}>Request rediscovery</button></div></div>
+        {cur.angle && <div className="item"><b>Outreach recommendation:</b> {cur.angle}{cur.price_range ? ` Offer ${cur.model ? cur.model.replace(/_/g, " ") + ", " : ""}${cur.price_range}.` : ""}</div>}
+        <ContactTab contacts={byCo[cur.id]} act={act} busy={busy} co={cur} />
+        <div className="panel" style={{ marginTop: 14 }}><h2>Previous communication</h2>
+          {data.messages.filter((m: Any) => m.company_id === cur.id).slice(0, 10).map((m: Any) => <div key={m.key} className="small" style={{ marginBottom: 6 }}><span className="chip">{m.status}</span> {m.subject} <span className="muted">to {m.to_email} {when(m.sent_at || m.created_at)}</span></div>)}
+          {data.replies.filter((r: Any) => r.company_id === cur.id).map((r: Any) => <div key={r.id} className="small" style={{ marginBottom: 6 }}><span className="chip">reply: {r.classification}</span> {r.summary}</div>)}
+          {!data.messages.some((m: Any) => m.company_id === cur.id) && <span className="muted small">No emails yet.</span>}
+        </div>
+      </div>}
     </>
   );
 }
@@ -857,9 +909,10 @@ function Health() {
   );
 }
 
-function Settings({ data, act, flash }: Any) {
+function Settings({ data, act, flash, can }: Any) {
   const s = data.settings;
-  const [v, setV] = useState({ approvers: s.approvers, cap_new_per_day: s.cap_new_per_day, cap_total_per_day: s.cap_total_per_day, spacing_sec: s.spacing_sec, organiser_permission: s.permission });
+  const [nu, setNu] = useState({ email: "", name: "", role: "operator", password: "" });
+  const [v, setV] = useState({ cap_new_per_day: s.cap_new_per_day, cap_total_per_day: s.cap_total_per_day, spacing_sec: s.spacing_sec, organiser_permission: s.permission });
   const [email, setEmail] = useState("");
   return (
     <>
@@ -871,12 +924,12 @@ function Settings({ data, act, flash }: Any) {
           <dl className="kv" style={{ marginTop: 10 }}>
             <dt>Model</dt><dd>{s.model} <span className={"chip " + (s.claude ? "good" : "bad")}>{s.claude ? "connected" : "key missing"}</span></dd>
             <dt>Research data</dt><dd>{s.crustdata ? <span className="chip good">Crustdata</span> : <><span className="chip warn">Live web search</span><div className="small muted">Add CRUSTDATA_API_KEY in Vercel for verified emails and firmographics.</div></>}</dd>
-            <dt>Gmail + Calendar</dt><dd>{s.gmail ? <>{s.gmail} <a href="/api/google/auth">Reconnect</a></> : s.googleApp ? <a className="btn" href="/api/google/auth">Connect Google</a> : <span className="small muted">Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Vercel, then connect.</span>}</dd>
+            <dt>Gmail + Calendar</dt><dd>{s.gmail ? <>{s.gmail} {can("admin") && <><a href="/api/google/auth">Reconnect</a> · <a href="#" onClick={(e) => { e.preventDefault(); confirm("Disconnect Google? Sending and invites stop until you reconnect.") && act("google_disconnect", {}, "Disconnecting Google"); }}>Disconnect</a></>}</> : s.googleApp ? <a className="btn" href="/api/google/auth">Connect Google</a> : <span className="small muted">Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Vercel, then connect.</span>}</dd>
           </dl>
         </div>
         <div className="panel">
           <h2>Rules</h2>
-          <label className="f">People who can approve emails and exceptions (comma separated)</label><input value={v.approvers} onChange={(e) => setV({ ...v, approvers: e.target.value })} />
+          <p className="small muted" style={{ marginTop: 0 }}>Approvers: {s.approvers || "none yet"}. Approval rights come from each person's role, below.</p>
           <div className="grid g3">
             <div><label className="f">New cold emails a day</label><input value={v.cap_new_per_day} onChange={(e) => setV({ ...v, cap_new_per_day: e.target.value })} /></div>
             <div><label className="f">Total emails a day</label><input value={v.cap_total_per_day} onChange={(e) => setV({ ...v, cap_total_per_day: e.target.value })} /></div>
@@ -887,6 +940,22 @@ function Settings({ data, act, flash }: Any) {
           <div className="row" style={{ marginTop: 10 }}><button className="btn" onClick={() => act("settings", v, "Saving").then((r: Any) => r && flash("Saved"))}>Save rules</button></div>
         </div>
       </div>
+      {can("admin") && <div className="panel">
+        <h2>People and roles</h2><p className="sub">Admin: everything, including users and connections. Approver: approves and sends emails, locks the floor, decides exceptions. Operator: runs the agents and edits drafts. Read-only: views.</p>
+        <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>
+          {(data.users || []).map((u: Any) => <tr key={u.id}><td>{u.name}{u.disabled ? <span className="chip bad"> disabled</span> : null}</td><td>{u.email}</td>
+            <td><select value={u.role} onChange={(e) => act("user_update", { id: u.id, role: e.target.value }, "Changing role")} aria-label={`Role for ${u.name}`}>{["admin", "approver", "operator", "readonly"].map((r) => <option key={r}>{r}</option>)}</select></td>
+            <td className="row"><button className="btn quiet" onClick={() => act("sessions_revoke", { user_id: u.id }, "Signing out").then((r: Any) => r && flash(`${u.name} signed out everywhere`))}>Sign out everywhere</button>
+              <button className="btn quiet" onClick={() => act("user_update", { id: u.id, disabled: !u.disabled }, u.disabled ? "Enabling" : "Disabling")}>{u.disabled ? "Enable" : "Disable"}</button></td></tr>)}
+        </tbody></table>
+        <div className="grid g3" style={{ marginTop: 12 }}>
+          <input placeholder="Name" value={nu.name} onChange={(e) => setNu({ ...nu, name: e.target.value })} aria-label="New user name" />
+          <input placeholder="Work email" value={nu.email} onChange={(e) => setNu({ ...nu, email: e.target.value })} aria-label="New user email" />
+          <select value={nu.role} onChange={(e) => setNu({ ...nu, role: e.target.value })} aria-label="New user role">{["approver", "operator", "readonly", "admin"].map((r) => <option key={r}>{r}</option>)}</select>
+        </div>
+        <div className="row" style={{ marginTop: 8 }}><input type="password" placeholder="Temporary password (10+ characters)" value={nu.password} onChange={(e) => setNu({ ...nu, password: e.target.value })} style={{ maxWidth: 320 }} aria-label="Temporary password" />
+          <button className="btn" disabled={!nu.email || !nu.name || nu.password.length < 10} onClick={() => act("user_add", nu, "Adding").then((r: Any) => { if (r) { flash(`Added ${nu.name}`); setNu({ email: "", name: "", role: "operator", password: "" }); } })}>Add person</button></div>
+      </div>}
       <div className="panel">
         <h2>Start over</h2><p className="sub">Clears every company, contact, email, meeting, deck and deal, and the event brief. Settings and the Google connection stay.</p>
         <button className="btn danger" onClick={() => { const t = prompt("Type RESET to clear the desk"); if (t === "RESET") act("reset", { confirm: "RESET" }, "Clearing the desk").then((r: Any) => r && flash("Desk cleared")); }}>Reset desk</button>

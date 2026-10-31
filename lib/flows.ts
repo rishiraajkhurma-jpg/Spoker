@@ -4,6 +4,7 @@ import * as L from "./ledger";
 import * as A from "./agents";
 import * as G from "./gmail";
 import { dataSource } from "./claude";
+import * as C from "./contacts";
 
 export const FALLBACK_DECK = "/fallback/sponsorship-deck.pdf";
 export const FALLBACK_MOU = "/fallback/mou.pdf";
@@ -23,7 +24,6 @@ export async function saveEvent(e: A.EventProfile) {
   await d.q(`INSERT INTO events (id, profile, updated_at) VALUES ('current', $1, $2) ON CONFLICT (id) DO UPDATE SET profile=excluded.profile, updated_at=excluded.updated_at`, [JSON.stringify(e), nowIso()]);
   const pin = String(e.postal_address || "").match(/\b\d{6}\b/);
   if (e.postal_address) await setSetting("postal", pin ? pin[0] : String(e.postal_address));
-  if (!(await getSetting("approvers", "")) && e.sender?.name) await setSetting("approvers", e.sender.name);
 }
 const firstName = (n?: string) => (n || "there").trim().split(/\s+/)[0];
 const slug = (s: string) => s.toLowerCase().replace(/^https?:\/\//, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
@@ -114,27 +114,95 @@ export async function runAnalyze(companyId: string) {
   if (!keep) { await L.setStage(companyId, "DISQUALIFIED", a.drop_reason || `intersection ${inter}`, "A1"); return { priority, dropped: true }; }
   await L.setStage(companyId, "QUALIFIED", `${priority}, intersection ${inter}`, "A1");
 
-  const ct = a.contact;
-  if (!ct || !ct.full_name) {
-    await L.addException(companyId, "no_contact", `No decision maker found for ${co.name}.`, "Add a contact by hand or ask the team for a warm intro.");
+  const usedCrustdata = raw.toolCalls.some((t) => /execute|crustdata/i.test(t.name));
+  const found = foundContacts(a);
+  if (!found.length) {
+    await L.addException(companyId, "no_contact", `No decision maker found for ${co.name}.`, "Add a contact by hand, ask the team for a warm intro, or request rediscovery.");
     return { priority, dropped: false, contact: false };
   }
-  const email = ct.email && G.SAFE_EMAIL.test(String(ct.email).trim()) ? String(ct.email).trim() : "";
-  const cid = `${companyId}--${slug(email || ct.full_name)}`;
-  await d.q(`INSERT INTO contacts (id, company_id, full_name, position, email, email_status, email_source, phone, linkedin_url, one_liner, context, hook, iitb_alum, warm_path, source, status, is_primary, linkedin_note, linkedin_dm, linkedin_status, created_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'active',1,$16,$17,'to_send',$18) ON CONFLICT (id) DO UPDATE SET linkedin_note=excluded.linkedin_note, linkedin_dm=excluded.linkedin_dm`,
-    [cid, companyId, ct.full_name, ct.position || "", email || null, email ? (ct.email_status || "public") : "not_found", ct.email_source || "", ct.phone || "", ct.linkedin_url || "", ct.one_liner || "",
-      JSON.stringify(ct.context || []), ct.hook || "", ct.iitb_alum || "unknown", ct.warm_path || "", ct.source || dataSource(), a.linkedin?.note || "", a.linkedin?.dm || "", nowIso()]);
-  if (a.backup_contact?.full_name) {
-    await d.q(`INSERT INTO contacts (id, company_id, full_name, position, linkedin_url, email_status, source, status, is_primary, created_at) VALUES ($1,$2,$3,$4,$5,'not_found',$6,'backup',0,$7) ON CONFLICT (id) DO NOTHING`,
-      [`${companyId}--${slug(a.backup_contact.full_name)}`, companyId, a.backup_contact.full_name, a.backup_contact.position || "", a.backup_contact.linkedin_url || "", dataSource(), nowIso()]);
+  const kind = C.sponsorKind(co.segment, a.model);
+  const checked = await Promise.all(found.map(async (x) => {
+    const email = await C.checkEmail({ email: x.email, fullName: x.full_name, companyDomain: co.domain, sourceUrl: /^https?:/.test(x.email_source || "") ? x.email_source : "", sourceKind: x.email_verified_by_crustdata && usedCrustdata ? "crustdata_verified" : "", evidenceDate: x.evidence_date, leftCompany: !!x.left_company });
+    const phone = await C.checkPhone({ phone: x.phone, type: x.phone_type, sourceUrl: x.phone_source, companyDomain: co.domain, switchboard: a.company_contact?.phone });
+    const sc = C.scoreContact({ position: x.designation, department: x.department, responsibility: x.responsibility, emailStatus: email.status, phoneStatus: phone.status, phoneType: phone.type, evidenceDate: x.evidence_date, companySize: num(a.company_size) }, kind);
+    return { x, email, phone, sc };
+  }));
+  // Primary = most relevant usable person (not outdated); departmental fallbacks only if no person qualifies.
+  const ranked = [...checked].sort((p, q) => (Number(q.x.kind !== "fallback") - Number(p.x.kind !== "fallback")) || (q.sc.score - p.sc.score));
+  const best = ranked.find((r) => r.email.status !== "OUTDATED") || ranked[0];
+  await d.q(`UPDATE contacts SET is_primary=0 WHERE company_id=$1`, [companyId]);
+  for (const r of checked) {
+    const x = r.x;
+    const cid = `${companyId}--${slug(x.full_name || r.email.normalized || x.kind)}`;
+    const srcs = [x.email_source, x.phone_source, ...(x.evidence || []).map((ev) => ev.url)].filter((u) => /^https?:/.test(u || ""));
+    await d.q(`INSERT INTO contacts (id, company_id, full_name, position, department, email, email_status, email_type, email_source, email_check, phone, phone_status, phone_type, phone_source,
+        one_liner, context, hook, iitb_alum, warm_path, source, status, is_primary, kind, relevance, relevance_parts, reason, responsibility, evidence, discovered_at, verified_at, created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$29)
+      ON CONFLICT (id) DO UPDATE SET position=excluded.position, department=excluded.department, email=COALESCE(contacts.email, excluded.email), email_status=excluded.email_status, email_type=excluded.email_type,
+        email_source=excluded.email_source, email_check=excluded.email_check, phone=excluded.phone, phone_status=excluded.phone_status, phone_type=excluded.phone_type, phone_source=excluded.phone_source,
+        is_primary=excluded.is_primary, kind=excluded.kind, relevance=excluded.relevance, relevance_parts=excluded.relevance_parts, reason=excluded.reason, responsibility=excluded.responsibility,
+        evidence=excluded.evidence, verified_at=excluded.verified_at`,
+      [cid, companyId, x.full_name || "", x.designation || "", x.department || "", r.email.normalized || null, r.email.status, r.email.type || "", x.email_source || "", JSON.stringify(r.email.notes),
+        r.phone.normalized || "", r.phone.status, r.phone.type || "", x.phone_source || "", x.one_liner || "", JSON.stringify((x.evidence || []).map((ev) => `${ev.claim}${ev.date ? ` (${ev.date})` : ""}`)),
+        x.hook || "", x.iitb_alum || "unknown", x.warm_path || "", srcs[0] || dataSource(), x.kind === "primary" || r === best ? "active" : "backup", r === best ? 1 : 0, x.kind || "alternative", r.sc.score,
+        JSON.stringify(r.sc.parts), x.reason || "", x.responsibility || "", JSON.stringify((x.evidence || []).filter((ev) => /^https?:/.test(ev.url || ""))), nowIso(), nowIso()]);
   }
-  await L.log("A2", companyId, "contact", `${ct.full_name}, ${ct.position || ""}${email ? "" : " (no public email; LinkedIn queue)"}`);
-  await L.setStage(companyId, "CONTACT_READY", `contact ${ct.full_name}`, "A2");
+  const primaryId = `${companyId}--${slug(best.x.full_name || best.email.normalized || best.x.kind)}`;
+  const ct = best.x;
+  await L.log("A2", companyId, "contact", `${ct.full_name}, ${ct.designation || ""}: relevance ${best.sc.score}/100, email ${best.email.status.toLowerCase()}, phone ${best.phone.status.toLowerCase()}`);
+  // Ready for outreach only when the primary email is verified or corroborated. Discovery alone is not enough.
   let queued: any = null;
-  if (email && (priority === "P1" || priority === "P2")) queued = await queueOffer(companyId);
-  else if (!email) await L.addException(companyId, "no_email", `${ct.full_name} (${ct.position}) has no public email. The LinkedIn note is ready; paste an email on the company page when you have one and the offer will be queued.`, "Send the LinkedIn note, or ask for a warm intro.");
+  const email = best.email.normalized;
+  if (email && (best.email.status === "VERIFIED" || best.email.status === "CORROBORATED")) {
+    await L.setStage(companyId, "CONTACT_READY", `contact ${ct.full_name} (${best.email.status.toLowerCase()})`, "A2");
+    if (priority === "P1" || priority === "P2") queued = await queueOffer(companyId);
+  } else if (email) {
+    await L.addException(companyId, "verify_contact", `${ct.full_name} (${ct.designation}) at ${co.name}: the email ${email} could not be verified (${best.email.notes.join("; ")}).`, "Check it on Decision Makers, then mark the contact as reviewed to prepare the offer.");
+  } else {
+    await L.addException(companyId, "no_email", `${ct.full_name} (${ct.designation}) has no public professional email.`, "Add an email on Decision Makers when you have one, or pick another contact as primary.");
+  }
+  void primaryId;
   return { priority, dropped: false, contact: true, queued };
+}
+
+/** Normalise the agent's answer (new "contacts" list or the older contact/backup shape). */
+function foundContacts(a: A.Analysis): A.FoundContact[] {
+  const list = Array.isArray(a.contacts) ? a.contacts.filter((x) => x && (x.full_name || x.email)) : [];
+  if (!list.length && a.contact?.full_name) {
+    list.push({ kind: "primary", full_name: a.contact.full_name, designation: a.contact.position || "", email: a.contact.email, email_source: a.contact.email_source, email_verified_by_crustdata: a.contact.email_status === "verified", phone: a.contact.phone, one_liner: a.contact.one_liner, hook: a.contact.hook, iitb_alum: a.contact.iitb_alum, warm_path: a.contact.warm_path, evidence: (a.contact.context || []).map((c) => ({ claim: c, url: "" })) });
+    if (a.backup_contact?.full_name) list.push({ kind: "alternative", full_name: a.backup_contact.full_name, designation: a.backup_contact.position || "" });
+  }
+  if (a.company_contact?.email && !list.some((x) => x.kind === "fallback")) list.push({ kind: "fallback", full_name: `${"Company"} contact`, designation: "Official contact", email: a.company_contact.email, email_source: a.company_contact.source, phone: a.company_contact.phone, phone_type: "switchboard", phone_source: a.company_contact.source });
+  return list.slice(0, 4);
+}
+
+/** A person confirms the contact: unlocks outreach for an unverified address. */
+export async function markContactReviewed(contactId: string, who: string) {
+  const d = await db();
+  const ct = (await d.q(`SELECT * FROM contacts WHERE id=$1`, [contactId]))[0];
+  if (!ct) throw new Error("Unknown contact");
+  await d.q(`UPDATE contacts SET reviewed_by=$1, reviewed_at=$2 WHERE id=$3`, [who, nowIso(), contactId]);
+  await L.log(who, ct.company_id, "contact_reviewed", ct.full_name);
+  let queued: any = null;
+  if (num(ct.is_primary) && ct.email) {
+    await d.q(`UPDATE exceptions SET status='resolved', resolved_at=$1, note=$2 WHERE company_id=$3 AND kind IN ('verify_contact','no_email') AND status='open'`, [nowIso(), `reviewed by ${who}`, ct.company_id]);
+    const st = await L.stageOf(ct.company_id);
+    if (st === "QUALIFIED" || st === "PROSPECT") await L.setStage(ct.company_id, "CONTACT_READY", `contact reviewed by ${who}`, who);
+    queued = await queueOffer(ct.company_id).catch((e) => ({ ok: false, reason: e.message }));
+  }
+  return { ok: true, queued };
+}
+
+/** Make another contact the primary. Unsent drafts to the old primary are cancelled. */
+export async function setPrimaryContact(contactId: string, who: string) {
+  const d = await db();
+  const ct = (await d.q(`SELECT * FROM contacts WHERE id=$1 AND status <> 'erased'`, [contactId]))[0];
+  if (!ct) throw new Error("Unknown contact");
+  await d.q(`UPDATE contacts SET is_primary=0 WHERE company_id=$1`, [ct.company_id]);
+  await d.q(`UPDATE contacts SET is_primary=1, status='active' WHERE id=$1`, [contactId]);
+  await d.q(`UPDATE messages SET status='cancelled', cancel_reason='primary contact changed' WHERE company_id=$1 AND contact_id<>$2 AND sequence='cold' AND status IN ('drafted','approved')`, [ct.company_id, contactId]);
+  await L.log(who, ct.company_id, "primary_contact", ct.full_name);
+  return { ok: true };
 }
 
 export async function queueOffer(companyId: string) {
@@ -143,7 +211,9 @@ export async function queueOffer(companyId: string) {
   const ct = await primaryContact(companyId);
   if (!ct?.email) throw new Error("This contact has no email yet.");
   if (!co.draft_body) throw new Error("No offer drafted yet. Run the analysis first.");
-  const q = await L.queue({ key: `${ct.id}:cold:0`, contact_id: ct.id, company_id: companyId, sequence: "cold", step: 0, subject: co.draft_subject || `${co.name} x ${e.name}`, body: A.withSignature(co.draft_body, e) });
+  if (["UNVERIFIED", "OUTDATED"].includes(String(ct.email_status)) && !ct.reviewed_at) throw new Error(`${ct.full_name}'s email is not verified. Review it on Decision Makers first.`);
+  const body = String(co.draft_body).replace(/^(Hi|Hello|Dear)\s+[^,\n]+,/i, `Hi ${firstName(ct.full_name)},`);
+  const q = await L.queue({ key: `${ct.id}:cold:0`, contact_id: ct.id, company_id: companyId, sequence: "cold", step: 0, subject: co.draft_subject || `${co.name} x ${e.name}`, body: A.withSignature(body, e) });
   if (q.ok) await L.log("A2", companyId, "offer_drafted", `Priced offer to ${ct.full_name} waiting for approval`);
   else await L.log("A2", companyId, "offer_refused", `${q.reason} ${(q.problems || []).join("; ")}`);
   return q;
@@ -152,10 +222,15 @@ export async function queueOffer(companyId: string) {
 export async function setContactEmail(contactId: string, email: string) {
   if (!G.SAFE_EMAIL.test(email.trim())) throw new Error("That does not look like an email address.");
   const d = await db();
-  await d.q(`UPDATE contacts SET email=$1, email_status='manual', email_source='added by manager' WHERE id=$2`, [email.trim(), contactId]);
+  const before = (await d.q(`SELECT c.*, co.domain FROM contacts c LEFT JOIN companies co ON co.id=c.company_id WHERE c.id=$1`, [contactId]))[0];
+  if (!before) throw new Error("Unknown contact");
+  const chk = await C.checkEmail({ email: email.trim(), fullName: before.full_name, companyDomain: before.domain });
+  await d.q(`UPDATE contacts SET email=$1, email_status=$2, email_type=$3, email_source='added by manager', email_check=$4, reviewed_by='manager', reviewed_at=$5, verified_at=$5 WHERE id=$6`,
+    [email.trim(), chk.status === "UNAVAILABLE" ? "UNVERIFIED" : chk.status, chk.type || "", JSON.stringify(chk.notes), nowIso(), contactId]);
   const ct = (await d.q(`SELECT * FROM contacts WHERE id=$1`, [contactId]))[0];
   await L.log("manager", ct.company_id, "email_added", `${ct.full_name} <${email}>`);
-  await d.q(`UPDATE exceptions SET status='resolved', resolved_at=$1, note='email added' WHERE company_id=$2 AND kind='no_email' AND status='open'`, [nowIso(), ct.company_id]);
+  await d.q(`UPDATE exceptions SET status='resolved', resolved_at=$1, note='email added' WHERE company_id=$2 AND kind IN ('no_email','verify_contact') AND status='open'`, [nowIso(), ct.company_id]);
+  if (["QUALIFIED", "PROSPECT"].includes(String(await L.stageOf(ct.company_id))) && num(ct.is_primary)) await L.setStage(ct.company_id, "CONTACT_READY", "email added by manager", "manager");
   const q = await queueOffer(ct.company_id).catch((e) => ({ ok: false, reason: e.message }));
   return { ok: true, queued: q };
 }
@@ -349,23 +424,35 @@ export async function scheduleMeeting(companyId: string, template: string, slots
   return q;
 }
 
-export async function confirmMeeting(companyId: string, startIso: string, minutes: number, who: string, origin = "") {
+export async function confirmMeeting(companyId: string, startIso: string, minutes: number, who: string, origin = "", verified = false) {
   const e = await needEvent();
   const d = await db();
   const co = await company(companyId);
   const ct = await primaryContact(companyId);
   if (!ct?.email) throw new Error("This contact has no email yet.");
-  const allowed = (await getSetting("approvers", "")).split(",").map((s) => s.trim().toLowerCase());
-  if (!allowed.includes((who || "").toLowerCase())) throw new Error("Pick an approver name (Settings).");
+  if (!verified) {
+    const allowed = (await getSetting("approvers", "")).split(",").map((s) => s.trim().toLowerCase());
+    if (!allowed.includes((who || "").toLowerCase())) throw new Error("Only an approver can confirm meetings.");
+  }
+  const start = L.parseTime(startIso);
+  if (isNaN(start.getTime())) throw new Error("Pick a valid meeting time.");
+  // Idempotent: the same company and start time is one meeting, one invite.
+  const dupe = (await d.q(`SELECT meet_link FROM meetings WHERE company_id=$1 AND start_at=$2 AND status IN ('scheduled','invite_failed')`, [companyId, start.toISOString()]))[0];
+  if (dupe) return { ok: true, link: dupe.meet_link || "", duplicate: true };
   const n = num(co.meeting_count) + 1;
   const deck = co.deck_id ? `${origin}/d/${co.deck_id}` : "";
-  let link = "", eventId = "";
+  let link = "", eventId = "", status = "scheduled";
   if (await G.connectedEmail()) {
-    const ev = await G.createMeet({ summary: `${co.name} x ${e.name}: partnership call`, description: `Agenda: your goals, options that fit them, next steps.${deck ? "\nPlan: " + deck : ""}`, startIso: L.parseTime(startIso).toISOString(), minutes, attendees: [ct.email] });
-    link = ev.link; eventId = ev.id;
+    try {
+      const ev = await G.createMeet({ requestId: `sd-${companyId}-${start.getTime()}`.slice(0, 60), summary: `${co.name} x ${e.name}: partnership call`, description: `Agenda: your goals, options that fit them, next steps.${deck ? "\nPlan: " + deck : ""}`, startIso: start.toISOString(), minutes, attendees: [ct.email] });
+      link = ev.link; eventId = ev.id;
+    } catch (err: any) {
+      status = "invite_failed";
+      await L.addException(companyId, "calendar_failed", `The calendar invite for ${co.name} (${startIso}) could not be created: ${String(err.message).slice(0, 160)}`, "Reconnect Google in Settings, or send the invite by hand.");
+    }
   }
-  await d.q(`INSERT INTO meetings (id, company_id, n, start_at, minutes, meet_link, event_id, status, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,'scheduled',$8)`,
-    [uid(), companyId, n, L.parseTime(startIso).toISOString(), minutes, link, eventId, nowIso()]);
+  await d.q(`INSERT INTO meetings (id, company_id, n, start_at, minutes, meet_link, event_id, status, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [uid(), companyId, n, start.toISOString(), minutes, link, eventId, status, nowIso()]);
   await d.q(`UPDATE companies SET meeting_count=$1 WHERE id=$2`, [n, companyId]);
   await L.setStage(companyId, "MEETING_SCHEDULED", `meeting ${n} on ${startIso}`, "A3");
   await L.log("A3", companyId, "meeting_booked", link ? `Calendar invite with Meet link sent to ${ct.email}` : `Meeting ${n} recorded (connect Google to send invites automatically)`);
@@ -479,19 +566,21 @@ export async function nurture(news: string) {
   return { drafted, sponsors: signed.length };
 }
 
-export async function resolveException(id: string, action: "approve" | "reject", who: string, note = "", subject?: string, body?: string) {
+export async function resolveException(id: string, action: "approve" | "reject", who: string, note = "", subject?: string, body?: string, verified = false) {
   const d = await db();
   const x = (await d.q(`SELECT * FROM exceptions WHERE id=$1`, [id]))[0];
   if (!x || x.status !== "open") throw new Error("Exception not open");
-  const allowed = (await getSetting("approvers", "")).split(",").map((s) => s.trim().toLowerCase());
-  if (!allowed.includes((who || "").toLowerCase())) throw new Error("Pick an approver name (Settings).");
+  if (!verified) {
+    const allowed = (await getSetting("approvers", "")).split(",").map((s) => s.trim().toLowerCase());
+    if (!allowed.includes((who || "").toLowerCase())) throw new Error("Only an approver can decide this.");
+  }
   let queued: any = null;
   if (action === "approve" && (body || x.draft_body)) {
     const ct = await primaryContact(x.company_id);
     if (ct) {
       const key = `${ct.id}:exception:${id}`;
       queued = await L.queue({ key, contact_id: ct.id, company_id: x.company_id, sequence: "reply", step: 1, subject: subject || x.draft_subject, body: body || x.draft_body });
-      if (queued.ok) await L.approve(key, who);
+      if (queued.ok) await L.approve(key, who, verified);
     }
   }
   if (queued && !queued.ok) return { ok: false, queued };

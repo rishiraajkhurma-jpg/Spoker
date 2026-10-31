@@ -1,10 +1,12 @@
-import { guard } from "./auth";
+import { requireUser, Role, User } from "./auth";
 
-export function wrap(fn: (req: Request) => Promise<any>, opts: { auth?: boolean } = { auth: true }) {
+/** Route wrapper: auth (role), same-origin check for writes, JSON errors. */
+export function wrap(fn: (req: Request, user: User) => Promise<any>, opts: { role?: Role } = {}) {
   return async (req: Request) => {
-    if (opts.auth !== false) { const g = await guard(req); if (g) return g; }
+    const r = await requireUser(req, opts.role || "readonly");
+    if (r.res) return r.res;
     try {
-      const out = await fn(req);
+      const out = await fn(req, r.user);
       return out instanceof Response ? out : Response.json(out ?? { ok: true });
     } catch (e: any) {
       console.error(e);

@@ -12,7 +12,7 @@ const SCHEMA = [
     model TEXT, tier TEXT, price_range TEXT, angle TEXT, audience_benefit TEXT, reasons TEXT, role_map TEXT,
     decision TEXT, why_now TEXT, updated_at TEXT)`,
   `CREATE TABLE IF NOT EXISTS contacts (id TEXT PRIMARY KEY, company_id TEXT, full_name TEXT, position TEXT,
-    email TEXT, email_status TEXT, phone TEXT, linkedin_url TEXT, one_liner TEXT, context TEXT, hook TEXT,
+    email TEXT, email_status TEXT, phone TEXT, one_liner TEXT, context TEXT, hook TEXT,
     iitb_alum TEXT, warm_path TEXT, source TEXT, status TEXT, is_primary INTEGER, created_at TEXT)`,
   `CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, key TEXT UNIQUE NOT NULL, contact_id TEXT,
     company_id TEXT, to_email TEXT, sequence TEXT, step INTEGER, subject TEXT, body TEXT, body_hash TEXT,
@@ -60,6 +60,26 @@ const MIGRATIONS = [
   `CREATE INDEX IF NOT EXISTS contacts_company_idx ON contacts (company_id)`,
   `CREATE INDEX IF NOT EXISTS log_ts_idx ON log (ts)`,
   `CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id)`,
+  `ALTER TABLE contacts ADD COLUMN department TEXT`,
+  `ALTER TABLE contacts ADD COLUMN email_type TEXT`,
+  `ALTER TABLE contacts ADD COLUMN email_check TEXT`,
+  `ALTER TABLE contacts ADD COLUMN phone_status TEXT`,
+  `ALTER TABLE contacts ADD COLUMN phone_type TEXT`,
+  `ALTER TABLE contacts ADD COLUMN phone_source TEXT`,
+  `ALTER TABLE contacts ADD COLUMN kind TEXT`,
+  `ALTER TABLE contacts ADD COLUMN relevance INTEGER`,
+  `ALTER TABLE contacts ADD COLUMN relevance_parts TEXT`,
+  `ALTER TABLE contacts ADD COLUMN reason TEXT`,
+  `ALTER TABLE contacts ADD COLUMN responsibility TEXT`,
+  `ALTER TABLE contacts ADD COLUMN evidence TEXT`,
+  `ALTER TABLE contacts ADD COLUMN discovered_at TEXT`,
+  `ALTER TABLE contacts ADD COLUMN verified_at TEXT`,
+  `ALTER TABLE contacts ADD COLUMN reviewed_by TEXT`,
+  `ALTER TABLE contacts ADD COLUMN reviewed_at TEXT`,
+  `ALTER TABLE contacts DROP COLUMN linkedin_note`,
+  `ALTER TABLE contacts DROP COLUMN linkedin_dm`,
+  `ALTER TABLE contacts DROP COLUMN linkedin_status`,
+  `ALTER TABLE contacts DROP COLUMN linkedin_url`,
 ];
 
 let injected: DB | null = null;
@@ -88,7 +108,7 @@ export async function db(): Promise<DB> {
     for (let i = 0; i < MIGRATIONS.length; i++) {
       if (done.has(i + 1)) continue;
       try { await d.q(MIGRATIONS[i]); }
-      catch (e: any) { if (!/already exists|duplicate column/i.test(String(e?.message || e))) throw new Error(`Migration ${i + 1} failed: ${e?.message || e}`); }
+      catch (e: any) { if (!/already exists|duplicate column|no such column|does not exist/i.test(String(e?.message || e))) throw new Error(`Migration ${i + 1} failed: ${e?.message || e}`); }
       await d.q(`INSERT INTO schema_migrations (id, sql, applied_at) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING`, [i + 1, MIGRATIONS[i], new Date().toISOString()]);
     }
   })();

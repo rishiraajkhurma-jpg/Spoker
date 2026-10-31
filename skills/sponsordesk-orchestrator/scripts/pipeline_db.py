@@ -64,8 +64,8 @@ CREATE TABLE IF NOT EXISTS companies(company_id TEXT PRIMARY KEY, event_id TEXT,
   intersection INTEGER, tier_suggested TEXT, model TEXT, priority TEXT, reasons_json TEXT, stage TEXT DEFAULT 'PROSPECT',
   stage_reason TEXT, owner TEXT, meeting_count INTEGER DEFAULT 0, role_map_json TEXT, updated_at TEXT);
 CREATE TABLE IF NOT EXISTS contacts(contact_id TEXT PRIMARY KEY, company_id TEXT, full_name TEXT, position TEXT,
-  seniority TEXT, role_in_deal TEXT, email TEXT, email_status TEXT, phone TEXT, linkedin_url TEXT, location TEXT,
-  one_liner TEXT, linkedin_context TEXT, personalization_hook TEXT, iitb_alum TEXT, warm_path TEXT, source TEXT,
+  seniority TEXT, role_in_deal TEXT, email TEXT, email_status TEXT, phone TEXT, evidence TEXT, location TEXT,
+  one_liner TEXT, phone_type TEXT, personalization_hook TEXT, iitb_alum TEXT, warm_path TEXT, source TEXT,
   source_url TEXT, collected_at TEXT, is_primary INTEGER DEFAULT 0, status TEXT DEFAULT 'active', last_verified_at TEXT);
 CREATE TABLE IF NOT EXISTS messages(message_id INTEGER PRIMARY KEY AUTOINCREMENT, idempotency_key TEXT UNIQUE NOT NULL,
   contact_id TEXT, company_id TEXT, to_email TEXT, channel TEXT, sequence TEXT, step TEXT, subject TEXT, body TEXT,
@@ -421,8 +421,8 @@ def main(a):
         c.execute("INSERT OR REPLACE INTO suppress VALUES(?,?,?)", (ehash(e), "erasure_request", iso(now())))
         ids = [r["contact_id"] for r in c.execute("SELECT contact_id FROM contacts WHERE lower(email)=lower(?)", (e,))]
         for cid in ids:
-            c.execute("""UPDATE contacts SET full_name='[erased]', email=NULL, phone=NULL, linkedin_url=NULL, location=NULL,
-                         one_liner=NULL, linkedin_context=NULL, personalization_hook=NULL, warm_path=NULL, status='erased' WHERE contact_id=?""", (cid,))
+            c.execute("""UPDATE contacts SET full_name='[erased]', email=NULL, phone=NULL, evidence=NULL, location=NULL,
+                         one_liner=NULL, phone_type=NULL, personalization_hook=NULL, warm_path=NULL, status='erased' WHERE contact_id=?""", (cid,))
             c.execute("UPDATE messages SET body='[erased]', subject='[erased]', to_email=NULL, status=CASE WHEN status IN ('drafted','approved') THEN 'cancelled' ELSE status END WHERE contact_id=?", (cid,))
             c.execute("UPDATE replies SET summary='[erased]' WHERE contact_id=?", (cid,))
         log(c, "manager", None, "forget", detail=f"{len(ids)} contact(s)")
@@ -434,7 +434,7 @@ def main(a):
                  WHERE co.stage IN ('DISQUALIFIED','NO_RESPONSE','LOST','OPTED_OUT','BOUNCED','PARKED') AND co.updated_at<?
                  AND ct.status<>'erased'""", (cutoff,))]
         for cid in ids:
-            c.execute("""UPDATE contacts SET phone=NULL, linkedin_context=NULL, personalization_hook=NULL, one_liner=NULL, location=NULL,
+            c.execute("""UPDATE contacts SET phone=NULL, phone_type=NULL, personalization_hook=NULL, one_liner=NULL, location=NULL,
                          status='purged' WHERE contact_id=?""", (cid,))
         print("PURGED", len(ids)); return 0
 

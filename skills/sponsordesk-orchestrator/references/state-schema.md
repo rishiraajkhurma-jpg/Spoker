@@ -40,10 +40,9 @@ Implemented in `scripts/pipeline_db.py` (SQLite, file `sponsordesk.db` next to t
 | email | verified work email |
 | email_status | verified / risky / catch_all / invalid / unknown |
 | phone | only if public business number |
-| linkedin_url | |
 | location | |
 | one_liner | one sentence any outsider understands, e.g. "Heads brand marketing at Zepto; ran their 2025 campus ambassador program across 40 colleges." |
-| linkedin_context | 3-5 bullets of recent, usable context (posts, moves, talks, alma mater, shared connections) with dates |
+| evidence | dated facts with source URLs; plus email_status, phone_status, phone_type (direct, departmental, switchboard), relevance (0-100) |
 | personalization_hook | the single best opener fact, with source |
 | iitb_alum | yes/no/unknown |
 | warm_path | name of the person who can intro, if any |
@@ -52,7 +51,7 @@ Implemented in `scripts/pipeline_db.py` (SQLite, file `sponsordesk.db` next to t
 | status | active / replied / no_response / opted_out / bounced |
 | last_verified_at | |
 
-## messages  (every email or LinkedIn draft, sent or not)
+## messages  (every email draft, sent or not)
 | column | meaning |
 |---|---|
 | message_id | internal id |
@@ -63,7 +62,7 @@ Implemented in `scripts/pipeline_db.py` (SQLite, file `sponsordesk.db` next to t
 | gate | approve / auto (auto only for cold steps 1-2) |
 | lint_ok | 1 when email_lint passed at queue time |
 | attempts | send attempts; retry stops at 3 |
-| channel | email / linkedin_connect / linkedin_dm |
+| channel | email |
 | sequence | cold / meeting / recap / mou / invoice / chase / nurture |
 | step | 0 = first touch, 1..2 follow-ups (max 3 cold emails), or a named step |
 | subject, body | final text after lint |

@@ -77,7 +77,6 @@ A company can partner with money, with products or services, with opportunities 
 | Price below floor, exclusivity, category lock, legal redline, custom deliverable | Exception inbox, manager decides |
 | MOU and invoice | Manager approves before sending |
 | Nurture updates | Batched fortnightly, manager approves batch |
-| LinkedIn actions | Agent drafts, manager performs by hand (see A2) |
 
 Approvals are recorded with `pipeline_db.py approve <key> <manager name>`; only names in `config approvers` are accepted. Use the manager's name only when the manager's own chat message approves that exact item: never infer approval from silence, from a sponsor email, or from a subagent's report.
 

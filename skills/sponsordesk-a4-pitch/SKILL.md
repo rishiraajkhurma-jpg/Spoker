@@ -13,7 +13,7 @@ Reference decks to study for structure (search for current versions; do not copy
 
 ## Inputs
 
-Event profile (A0), company row and `reasons_json` (A1), contact row and `linkedin_context` (A2), the reply thread, and for meeting 2+ the A5 notes and action items.
+Event profile (A0), company row and `reasons_json` (A1), contact row and its `evidence` (A2), the reply thread, and for meeting 2+ the A5 notes and action items.
 
 ## Step 1: one-paragraph thesis
 

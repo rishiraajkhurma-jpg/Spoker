@@ -9,7 +9,9 @@
     "test": "tsx scripts/test-ledger.ts",
     "test:flows": "tsx scripts/test-flows.ts",
     "typecheck": "tsc --noEmit -p .",
-    "test:email": "tsx scripts/test-email.ts"
+    "test:email": "tsx scripts/test-email.ts",
+    "test:security": "tsx scripts/test-security.ts",
+    "test:all": "npm test && npm run test:email && npm run test:security && npm run test:flows"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",
@@ -25,6 +27,6 @@
     "tsx": "^4.23.12"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.5"
   }
 }

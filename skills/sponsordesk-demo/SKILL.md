@@ -31,7 +31,7 @@ A sales cycle takes weeks, so the finished work for an unseen request is a **spo
 
 ## Stub honestly (one slide each)
 
-Calendar scheduling (show a template), Gemini notes (paste a transcript), GST/TDS (one rule on a slide), A7 nurture, the council, LinkedIn, the full 25 collaboration models (show 5).
+Calendar scheduling (show a template), Gemini notes (paste a transcript), GST/TDS (one rule on a slide), A7 nurture, the council, the full 25 collaboration models (show 5).
 
 ## Hour-by-hour (10:30 to 15:30)
 

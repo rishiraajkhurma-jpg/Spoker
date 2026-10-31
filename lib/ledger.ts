@@ -292,17 +292,29 @@ export async function suppress(email: string, reason: string) {
   await d.q(`UPDATE messages SET status='cancelled', cancel_reason='suppressed' WHERE lower(to_email)=lower($1) AND status IN ('drafted','approved')`, [email]);
 }
 
+/** Erasure request: suppress the address, wipe the contact, and redact their name and email everywhere they appear. */
 export async function forget(email: string) {
   const d = await db();
-  await suppress(email, "erasure_request");
-  const ids = (await d.q(`SELECT id FROM contacts WHERE lower(email)=lower($1)`, [email])).map((r) => r.id);
-  for (const id of ids) {
-    await d.q(`UPDATE contacts SET full_name='[erased]', email=NULL, phone=NULL, linkedin_url=NULL, one_liner=NULL, context=NULL, hook=NULL, warm_path=NULL, status='erased' WHERE id=$1`, [id]);
+  const em = String(email || "").trim();
+  if (!em) throw new Error("Give the email address to erase.");
+  await suppress(em, "erasure_request");
+  const rows = await d.q(`SELECT id, full_name FROM contacts WHERE lower(email)=lower($1)`, [em]);
+  for (const r of rows) {
+    const id = r.id, name = String(r.full_name || "");
+    await d.q(`UPDATE contacts SET full_name='[erased]', email=NULL, phone=NULL, one_liner=NULL, context=NULL, hook=NULL, warm_path=NULL, email_source=NULL, email_check=NULL,
+      phone_source=NULL, evidence=NULL, responsibility=NULL, reason=NULL, status='erased' WHERE id=$1`, [id]);
     await d.q(`UPDATE messages SET body='[erased]', subject='[erased]', to_email=NULL, status=CASE WHEN status IN ('drafted','approved') THEN 'cancelled' ELSE status END WHERE contact_id=$1`, [id]);
     await d.q(`UPDATE replies SET summary='[erased]' WHERE contact_id=$1`, [id]);
+    for (const needle of [em, name].filter((x) => x && x.length > 2 && x !== "[erased]")) {
+      await d.q(`UPDATE meetings SET notes=REPLACE(notes, $1, '[erased]'), digest=REPLACE(digest, $1, '[erased]') WHERE notes LIKE '%' || $1 || '%' OR digest LIKE '%' || $1 || '%'`, [needle]);
+      await d.q(`UPDATE decks SET json=REPLACE(json, $1, '[erased]') WHERE json LIKE '%' || $1 || '%'`, [needle]);
+      await d.q(`UPDATE log SET detail=REPLACE(detail, $1, '[erased]') WHERE detail LIKE '%' || $1 || '%'`, [needle]);
+      await d.q(`UPDATE exceptions SET question=REPLACE(question, $1, '[erased]'), draft_body=REPLACE(draft_body, $1, '[erased]'), recommendation=REPLACE(recommendation, $1, '[erased]') WHERE question LIKE '%' || $1 || '%' OR draft_body LIKE '%' || $1 || '%' OR recommendation LIKE '%' || $1 || '%'`, [needle]);
+      await d.q(`UPDATE deals SET mou=REPLACE(mou, $1, '[erased]') WHERE mou LIKE '%' || $1 || '%'`, [needle]);
+    }
   }
-  await log("manager", null, "forget", `${ids.length} contact(s)`);
-  return ids.length;
+  await log("manager", null, "forget", `${rows.length} contact(s) erased`);
+  return rows.length;
 }
 
 export type ReplyClass = "interested" | "meeting" | "need_info" | "referral" | "not_now" | "not_interested" | "opt_out" | "auto_reply" | "bounce";

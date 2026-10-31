@@ -25,7 +25,7 @@ const RULES = `House rules (non-negotiable):
 
 const research = () => (hasCrustdata()
   ? "Use the Crustdata tools for company and people data. Crustdata runs in code mode: first call get_schema (or list_tools) to see the available data tools and their parameters, then call execute with a short plain JavaScript script (no type annotations) that uses `await callTool(name, params)` and returns only the fields you need. Crustdata also offers live web search and page fetch: use them for news, event pages and company sites, and cite the URLs. Be frugal with credits and time: you have about 2 minutes and at most 5 tool calls, so batch several lookups inside one execute script (use parallelMap) instead of many small calls. Search first, enrich only the one chosen person for a business email. Do not paste raw tool output back; keep only what you need."
-  : "Use web search. Read real pages (company site, press, news, team pages, LinkedIn public results). Cite the exact URL for each fact.");
+  : "Use web search. Read real pages (company site, press, news, team pages, public professional bios). Cite the exact URL for each fact.");
 
 export function profileText(e: EventProfile) {
   return `EVENT PROFILE
@@ -86,7 +86,7 @@ ${research()}
 Step 1, identify the event. Search the web for it: official site, last edition's pages, sponsor page, press coverage, social posts. You must tie the manager's line to ONE real event (name, organiser, edition). If nothing describes it, or several different events match and you cannot tell which one is meant, set "status":"clarify" and ask 1 to 3 short, specific questions (for example: which institute, which year, the website link). Do not guess.
 Step 2, if the event is clear, fill every field from what you read:
 - audience: who attends, in plain words: age range, who they are (students, founders, professionals), which colleges or cities, and size (footfall, registrations) with the year and source domain in brackets. Age range and mix may come from the event type and its own pages: then write "typical for this kind of event". Never write "unknown".
-- past_sponsors: names with years from the sponsor page, previous edition pages, press or official social posts. If you find none, write exactly where you looked, e.g. "Searched ecell.in sponsor pages, 2025 press coverage and LinkedIn posts; no published sponsor list found."
+- past_sponsors: names with years from the sponsor page, previous edition pages, press or official social posts. If you find none, write exactly where you looked, e.g. "Searched ecell.in sponsor pages, 2025 press coverage and official social posts; no published sponsor list found."
 - proof: each published number or fact that proves reach (footfall, registrations, startups, speakers, media), with the exact page URL that shows it.
 - sources: every page you actually read and used, with the URL and what it supports.
 Pricing: base tiers on what this event and peer fests actually charged where you can find it (cite), otherwise on comparable Indian college fests; mark them as suggestions. Floor = about 80% of the smallest cash tier.`;
@@ -114,7 +114,7 @@ Return only:
     return {
       status: "clarify", searches, sources: good,
       found: String(data.found || (good.length ? "Some pages matched, but not clearly one event." : "No page on the web clearly describes this event.")),
-      questions: qs.length ? qs : ["What is the event's official website or Instagram/LinkedIn page?", "Which institute or organisation runs it, and which edition or year is this?", "Who attends (students, founders, professionals) and roughly how many?"],
+      questions: qs.length ? qs : ["What is the event's official website or social media page?", "Which institute or organisation runs it, and which edition or year is this?", "Who attends (students, founders, professionals) and roughly how many?"],
     };
   }
 
@@ -151,7 +151,10 @@ Return only:
   return claudeJson<{ companies: any[] }>({ system, prompt, crustdata: true, web: 10, maxTokens: 8000 });
 }
 
-// ---------- A1 + A2: analyze one company, find the contact, write the priced offer and LinkedIn note ----------
+// ---------- A1 + A2: analyze one company, find the decision makers, write the priced offer ----------
+export type FoundContact = { kind: "primary" | "alternative" | "fallback"; full_name: string; designation: string; department?: string; email?: string; email_source?: string;
+  email_verified_by_crustdata?: boolean; phone?: string; phone_type?: string; phone_source?: string; responsibility?: string; evidence?: { claim: string; url: string; date?: string }[];
+  evidence_date?: string; left_company?: boolean; reason?: string; one_liner?: string; hook?: string; iitb_alum?: string; warm_path?: string };
 export type Analysis = {
   decision: "keep" | "drop"; drop_reason?: string;
   signals: { claim: string; source: string; date?: string }[];
@@ -159,24 +162,32 @@ export type Analysis = {
   their_pov: { score: number; factors: { factor: string; points: number; max: number; why: string }[] };
   model: string; tier: string; price_range: string; angle: string; audience_benefit: string;
   role_map: { champion?: string; budget_owner?: string; agency?: string; procurement?: string };
-  contact: { full_name?: string; position?: string; email?: string; email_status?: string; email_source?: string; linkedin_url?: string; phone?: string; one_liner?: string; context?: string[]; hook?: string; iitb_alum?: string; warm_path?: string; source?: string } | null;
-  backup_contact?: { full_name?: string; position?: string; linkedin_url?: string } | null;
+  contacts?: FoundContact[];
+  company_contact?: { email?: string; phone?: string; source?: string };
+  company_size?: number;
+  // older answer shape, still accepted
+  contact?: { full_name?: string; position?: string; email?: string; email_status?: string; email_source?: string; phone?: string; one_liner?: string; context?: string[]; hook?: string; iitb_alum?: string; warm_path?: string; source?: string } | null;
+  backup_contact?: { full_name?: string; position?: string } | null;
   email: { subject: string; body: string } | null;
-  linkedin: { note: string; dm: string } | null;
 };
 
 export async function analyze(e: EventProfile, company: { name: string; domain?: string; why_now?: string }) {
   const system = `You are SponsorDesk A1+A2: you score one company as a sponsor, find the right person, and prepare the first touch. ${RULES}
 ${research()}
-Find the budget owner or day-to-day owner for the segment: brand/marketing head, campus hiring or employer branding lead, startup/ecosystem partnerships, developer relations, or CSR head. At startups under 200 people, the founder or marketing head. At companies over 200 people NEVER pick the CEO, founder or MD as the primary contact: they do not own fest budgets and the email will be ignored; pick the brand, marketing, campus or partnerships owner and use the founder only as the warm_path. Also one backup person. Prefer an IIT Bombay alum only between two candidates with the same fit. Get their public LinkedIn URL from search results. Email: only if it is published on a public page you cite (or Crustdata verified); otherwise leave email empty and set email_status "not_found". Re-check negative signals: hiring freeze, layoffs, headcount drop, the person leaving.
+Decision makers. Pick the people whose job is closest to this sponsorship, not the most senior:
+- Brand sponsorship: CMO, Head of Marketing, Marketing Director, Brand Manager, Brand Partnerships Manager.
+- Event partnerships (hiring, workshops, developer, founder ecosystem): Head of Partnerships, Sponsorship Manager, Strategic or Corporate Partnerships Manager, Experiential Marketing Manager, campus or employer-branding lead, developer relations.
+- CSR: Head of CSR, CSR Manager, Corporate Communications Head, Community Investment Manager.
+At companies over 200 people NEVER pick the CEO, founder or MD: they do not own fest budgets; use them only as warm_path. At startups under 200 people the founder can be right.
+Return up to three: "primary" (best fit), "alternative" (second person), "fallback" (a departmental or company contact such as partnerships@ or the official contact page, with full_name like "Partnerships team").
+Contact data, legitimate public sources only: company website and contact pages, press releases, public directories, official announcements, public professional bios, Crustdata enrichment. Email: only if it is published on a page you cite or Crustdata returns it as verified (then set email_verified_by_crustdata true); never build an address from a name pattern. Phone: business numbers only (a published direct office line, a department line, or the company switchboard, labelled as such); never a private mobile. Give the exact source URL for each email and phone, the date of the evidence, and whether the person may have left (left_company). Re-check negative signals: hiring freeze, layoffs, headcount drop.
 
 Scoring (0-100 each, show factor points):
 OUR POV: ability to pay 25, brand fit and prestige 20, likelihood to close (warm path, alumni, past fest sponsorship) 20, deal size vs our tiers 15, value beyond cash 10, effort (procurement load) 10.
 THEIR POV (their marketing team): audience match 30, live objective right now 25, channel habit (already spends on campus/events) 15, measurable ROI available 15, budget timing (Indian FY Apr-Mar) 10, competitive pressure 5.
 Hard drop: brand-safety category, company in distress, institute rules forbid it. No cash budget is NOT a drop: pick a non-cash model (product_inkind, services_credits, opportunity).
 
-First email = a priced OFFER, not a meeting request: an activation named for them (chosen because of the signal), a price range from our tiers or the in-kind ask, the metric it is measured on with their own tracking, one sourced proof point from the event profile if available, CTA "Reply 'send' for the one-page plan." End with exactly: "If this is not relevant, reply 'no' and I will not follow up." Under 100 words. Format the body as "Hi <first name>," then a blank line, then 2 or 3 short paragraphs separated by blank lines (\n\n). No links. No signature. Subject 3 to 7 words.
-LinkedIn note: under 200 characters, no pitch, a genuine reason to connect. LinkedIn DM (after they accept): under 60 words, the same offer in short.`;
+First email = a priced OFFER, not a meeting request: an activation named for them (chosen because of the signal), a price range from our tiers or the in-kind ask, the metric it is measured on with their own tracking, one sourced proof point from the event profile if available, CTA "Reply 'send' for the one-page plan." End with exactly: "If this is not relevant, reply 'no' and I will not follow up." Under 100 words. Format the body as "Hi <first name of the primary contact>," then a blank line, then 2 or 3 short paragraphs separated by blank lines (\n\n). No links. No signature. Subject 3 to 7 words.`;
   const prompt = `${profileText(e)}
 
 COMPANY: ${company.name} ${company.domain ? `(${company.domain})` : ""}
@@ -188,9 +199,10 @@ Return only:
 "their_pov":{"score":0,"factors":[{"factor":"","points":0,"max":0,"why":""}]},
 "model":"one of: ${MODELS.join("|")}","tier":"","price_range":"","angle":"one line why them, why now, why us","audience_benefit":"",
 "role_map":{"champion":"","budget_owner":"","agency":"","procurement":""},
-"contact":{"full_name":"","position":"","email":"","email_status":"verified|public|not_found","email_source":"url","linkedin_url":"","phone":"","one_liner":"one plain sentence an outsider understands","context":["dated bullet with source"],"hook":"","iitb_alum":"yes|no|unknown","warm_path":"","source":"url"},
-"backup_contact":{"full_name":"","position":"","linkedin_url":""},
-"email":{"subject":"","body":""},"linkedin":{"note":"","dm":""}}</json>`;
+"company_size":0,
+"contacts":[{"kind":"primary|alternative|fallback","full_name":"","designation":"","department":"","email":"","email_source":"url or crustdata","email_verified_by_crustdata":false,"phone":"","phone_type":"direct|departmental|switchboard","phone_source":"url","responsibility":"evidence they own sponsorships or partnerships, with url","evidence":[{"claim":"","url":"","date":"YYYY-MM-DD"}],"evidence_date":"YYYY-MM-DD","left_company":false,"reason":"why this person for this sponsorship","one_liner":"one plain sentence an outsider understands","hook":"","iitb_alum":"yes|no|unknown","warm_path":""}],
+"company_contact":{"email":"","phone":"","source":"url"},
+"email":{"subject":"","body":""}}</json>`;
   return claudeJson<Analysis>({ system, prompt, crustdata: true, web: 8, maxTokens: 10000 });
 }
 
