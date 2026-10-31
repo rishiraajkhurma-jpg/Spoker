@@ -24,7 +24,7 @@ export function hasCrustdata() { return !!process.env.CRUSTDATA_API_KEY; }
 export function dataSource() { return hasCrustdata() ? "crustdata" : "web"; }
 
 // Billing, quota or auth failures on one provider fall back to the other if its key exists.
-const SWITCHABLE = /credit balance|billing|quota|RESOURCE_EXHAUSTED|rate.?limit|overloaded|API (401|403|429|529)|invalid x-api-key|authentication|PERMISSION_DENIED|UNAUTHENTICATED/i;
+const SWITCHABLE = /credit balance|billing|quota|RESOURCE_EXHAUSTED|rate.?limit|overloaded|high demand|UNAVAILABLE|API (401|403|429|500|503|529)|invalid x-api-key|authentication|PERMISSION_DENIED|UNAUTHENTICATED/i;
 function friendly(msg: string, who: string) {
   return friendlyCore(msg, who) + ` [${msg.replace(/\s+/g, " ").slice(0, 220)}]`;
 }
@@ -138,11 +138,15 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
     if (tools) body.tools = tools;
     let res: Response | null = null;
     let errText = "";
-    for (let mi = gm; mi < gModels.length; mi++) {
-      res = await fetch(`${GEMINI}/${gModels[mi]}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body) });
-      if (res.ok) { gm = mi; break; }
-      errText = (await res.text()).slice(0, 500);
-      if (![404, 429].includes(res.status)) break; // only quota / unknown model move to a lighter model
+    outer: for (let mi = gm; mi < gModels.length; mi++) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        res = await fetch(`${GEMINI}/${gModels[mi]}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body) });
+        if (res.ok) { gm = mi; break outer; }
+        errText = (await res.text()).slice(0, 500);
+        if ([500, 503].includes(res.status) && attempt === 0) { await new Promise((r) => setTimeout(r, 2500)); continue; } // busy: retry once
+        break;
+      }
+      if (![404, 429, 500, 503].includes(res!.status)) break; // quota, busy or unknown model: try a lighter model
     }
     if (!res || !res.ok) throw new Error(`Gemini API ${res?.status}: ${errText}`);
     last = await res.json();
