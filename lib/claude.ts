@@ -15,16 +15,37 @@ export function provider(): "gemini" | "anthropic" {
   if (process.env.ANTHROPIC_API_KEY) return "anthropic";
   return process.env.GEMINI_API_KEY ? "gemini" : "anthropic";
 }
-export function model() {
-  if (process.env.SD_MODEL && !(provider() === "gemini" && process.env.SD_MODEL.startsWith("claude"))) return process.env.SD_MODEL;
-  return provider() === "gemini" ? (process.env.GEMINI_MODEL || "gemini-3.8-flash") : "claude-sonnet-5-5";
+export function model(p: string = provider()) {
+  if (p === "gemini") return process.env.GEMINI_MODEL || (process.env.SD_MODEL && !process.env.SD_MODEL.startsWith("claude") ? process.env.SD_MODEL : "gemini-3.8-flash");
+  return process.env.SD_MODEL && process.env.SD_MODEL.startsWith("claude") ? process.env.SD_MODEL : "claude-sonnet-5-5";
 }
 export function hasClaude() { return provider() === "gemini" ? !!process.env.GEMINI_API_KEY : !!process.env.ANTHROPIC_API_KEY; }
 export function hasCrustdata() { return !!process.env.CRUSTDATA_API_KEY; }
 export function dataSource() { return hasCrustdata() ? "crustdata" : "web"; }
 
+// Billing, quota or auth failures on one provider fall back to the other if its key exists.
+const SWITCHABLE = /credit balance|billing|quota|RESOURCE_EXHAUSTED|rate.?limit|overloaded|API (401|403|429|529)|invalid x-api-key|authentication|PERMISSION_DENIED|UNAUTHENTICATED/i;
+function friendly(msg: string, who: string) {
+  if (/credit balance|billing/i.test(msg)) return `${who}: the account has no credit. Add credit (console.anthropic.com > Plans & Billing) or add a working GEMINI_API_KEY in Vercel.`;
+  if (/401|403|invalid x-api-key|authentication|UNAUTHENTICATED|PERMISSION_DENIED/i.test(msg)) return `${who}: the API key was rejected. Check it in Vercel > Settings > Environment Variables.`;
+  if (/quota|RESOURCE_EXHAUSTED|429|rate.?limit/i.test(msg)) return `${who}: quota or rate limit reached. Wait a minute or raise the limit.`;
+  return `${who}: ${msg.slice(0, 300)}`;
+}
 export async function claude(opts: Opts): Promise<ClaudeResult> {
-  return provider() === "gemini" ? gemini(opts) : anthropic(opts);
+  const first = provider();
+  const run = (p: string) => (p === "gemini" ? gemini(opts) : anthropic(opts));
+  try {
+    return await run(first);
+  } catch (e: any) {
+    const other = first === "gemini" ? "anthropic" : "gemini";
+    const otherKey = other === "gemini" ? process.env.GEMINI_API_KEY : process.env.ANTHROPIC_API_KEY;
+    const msg = String(e?.message || e);
+    if (otherKey && SWITCHABLE.test(msg)) {
+      try { return await run(other); }
+      catch (e2: any) { throw new Error(`${friendly(msg, first === "gemini" ? "Gemini" : "Claude")} Fallback also failed. ${friendly(String(e2?.message || e2), other === "gemini" ? "Gemini" : "Claude")}`); }
+    }
+    throw new Error(friendly(msg, first === "gemini" ? "Gemini" : "Claude"));
+  }
 }
 
 function addSource(list: Source[], url?: string, title?: string) {
@@ -52,7 +73,7 @@ async function anthropic(opts: Opts): Promise<ClaudeResult> {
   let last: any = null;
   const texts: string[] = [];
   for (let turn = 0; turn < 8; turn++) {
-    const body: any = { ...body0, model: model(), max_tokens: opts.maxTokens || 8000, system: opts.system, messages };
+    const body: any = { ...body0, model: model("anthropic"), max_tokens: opts.maxTokens || 8000, system: opts.system, messages };
     if (tools.length) body.tools = tools;
     const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(body) });
     if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 500)}`);
@@ -110,7 +131,7 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
   for (let turn = 0; turn < 16; turn++) {
     const body: any = { systemInstruction: { parts: [{ text: opts.system }] }, contents, generationConfig: { maxOutputTokens: Math.max(opts.maxTokens || 8000, 2048) } };
     if (tools) body.tools = tools;
-    const res = await fetch(`${GEMINI}/${model()}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body) });
+    const res = await fetch(`${GEMINI}/${model("gemini")}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body) });
     if (!res.ok) throw new Error(`Gemini API ${res.status}: ${(await res.text()).slice(0, 500)}`);
     last = await res.json();
     const cand = last.candidates?.[0];
