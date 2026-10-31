@@ -147,6 +147,7 @@ export async function setContactEmail(contactId: string, email: string) {
   await d.q(`UPDATE contacts SET email=$1, email_status='manual', email_source='added by manager' WHERE id=$2`, [email.trim(), contactId]);
   const ct = (await d.q(`SELECT * FROM contacts WHERE id=$1`, [contactId]))[0];
   await L.log("manager", ct.company_id, "email_added", `${ct.full_name} <${email}>`);
+  await d.q(`UPDATE exceptions SET status='resolved', resolved_at=$1, note='email added' WHERE company_id=$2 AND kind='no_email' AND status='open'`, [nowIso(), ct.company_id]);
   const q = await queueOffer(ct.company_id).catch((e) => ({ ok: false, reason: e.message }));
   return { ok: true, queued: q };
 }
@@ -223,7 +224,7 @@ async function handleInbound(co: any, ct: any, gmailId: string, text: string, or
   if (["interested", "meeting", "need_info", "referral"].includes(c.label)) {
     if (c.offer_inr && c.offer_inr < (e.floor_inr || 0)) {
       const k = await A.counterOffer(e, co, c.offer_inr, c.summary, firstName(ct.full_name));
-      await L.addException(co.id, "below_floor", `${co.name} offered INR ${c.offer_inr.toLocaleString("en-IN")}, below your floor of INR ${e.floor_inr.toLocaleString("en-IN")}.`, k.recommendation, k.subject, A.withSignature(k.body, e));
+      await L.addException(co.id, "below_floor", `${co.name} offered INR ${c.offer_inr.toLocaleString("en-IN")}, below your floor of INR ${e.floor_inr.toLocaleString("en-IN")}.`, ((k as any).floor_warning ? (k as any).floor_warning + " " : "") + k.recommendation, k.subject, A.withSignature(k.body, e));
       await L.log("A5", co.id, "counter_drafted", k.recommendation);
     } else {
       let deckUrl = "";
@@ -381,7 +382,7 @@ export async function ingestNotes(companyId: string, notes: string) {
   for (const x of g.exceptions || []) if (x) await L.addException(companyId, "meeting_exception", `${co.name}: ${x}`, "Decide before the next touch.");
   if (g.offer_inr && g.offer_inr < e.floor_inr) {
     const k = await A.counterOffer(e, co, g.offer_inr, g.summary, firstName(ct?.full_name));
-    await L.addException(companyId, "below_floor", `${co.name} mentioned INR ${Number(g.offer_inr).toLocaleString("en-IN")}, below your floor.`, k.recommendation, k.subject, A.withSignature(k.body, e));
+    await L.addException(companyId, "below_floor", `${co.name} mentioned INR ${Number(g.offer_inr).toLocaleString("en-IN")}, below your floor.`, ((k as any).floor_warning ? (k as any).floor_warning + " " : "") + k.recommendation, k.subject, A.withSignature(k.body, e));
   }
   return g;
 }

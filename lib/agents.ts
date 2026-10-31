@@ -16,6 +16,7 @@ export const MODELS = ["cash_tier", "property_naming", "brand_integration", "act
 const RULES = `House rules (non-negotiable):
 - Evidence or nothing. Every claim about a company or person carries a source: a URL you actually read, or a Crustdata field, plus a date. If you do not have it, write "unknown". Never invent numbers, people, emails or results.
 - Never invent event numbers: use only the event profile.
+- The floor price is internal and confidential. Never write it, and never use the words "floor", "minimum price" or "lowest we can go" in anything a sponsor will read. Quote tier prices and price ranges only.
 - Public business contact data only. An email is only "verified" if it appears on a public page you cite or comes from Crustdata enrichment. Never guess email patterns.
 - Writing: plain text, no em dashes or en dashes anywhere (use commas, colons, full stops), no emoji, no exclamation marks in subjects, none of these phrases: "hope this email finds you", "reaching out", "leverage", "synergy", "unlock", "elevate", "seamless", "I'd love to", "circling back", "touching base", "just checking in", "excited to".
 - Indian business English, direct and polite. Amounts as INR with Indian grouping (e.g. INR 3,00,000 or 3 lakh).`;
@@ -177,7 +178,7 @@ export async function draftReply(e: EventProfile, c: any, replySummary: string, 
   const system = `You draft replies to sponsors for the SponsorDesk manager to approve. ${RULES}
 Answer only what they asked. If they want the plan: include the one-page plan link given below and say a short business case they can forward internally is included there; mention vendor documents (PAN, GST certificate, bank letter) are ready when procurement needs them. If they want a call: propose Tuesday or Wednesday afternoon this week (IST) and say a calendar invite will follow. Never offer discounts; trade deliverables instead. Under 120 words, no signature.`;
   const prompt = `${profileText(e)}\nCOMPANY: ${c.name}. Angle: ${c.angle}. Offer: ${c.model}, ${c.price_range}.\nPlan link: ${deckUrl || "(will be attached)"}\nTheir reply (summary, classified ${label}): ${replySummary}\nGreet as "Hi ${firstName},". Return only <json>{"subject":"Re: ...","body":""}</json>`;
-  return (await claudeJson<{ subject: string; body: string }>({ system, prompt, maxTokens: 1500 })).data;
+  return noFloor(e, async (extra) => (await claudeJson<{ subject: string; body: string }>({ system, prompt: prompt + extra, maxTokens: 1500 })).data);
 }
 
 // ---------- A3: scheduling ----------
@@ -224,11 +225,26 @@ Greet as "Hi ${firstName},". Return only <json>{"summary":"3 lines","their_goals
 }
 
 // ---------- A5: counter-offer for below-floor offers ----------
+/** True if a sponsor-facing text reveals the internal floor. */
+export function leaksFloor(text: string, floor?: number) {
+  const t = (text || "").toLowerCase();
+  if (/\bfloor\b|minimum (price|amount|budget)|lowest we can/.test(t)) return true;
+  if (!floor) return false;
+  const plain = String(floor), indian = Number(floor).toLocaleString("en-IN"), lakh = String(+(floor / 100000).toFixed(2));
+  return t.replace(/\s/g, "").includes(plain) || t.includes(indian) || new RegExp(`\\b${lakh.replace(".", "\\.")}\\s*(l\\b|lakh|lac)`).test(t);
+}
+async function noFloor<T extends { body: string }>(e: EventProfile, make: (extra: string) => Promise<T>): Promise<T> {
+  let r = await make("");
+  if (leaksFloor(r.body, e.floor_inr)) r = await make(`\nIMPORTANT: your previous draft revealed our internal floor price. Do not mention the floor, a minimum, or the number ${e.floor_inr} in any form.`);
+  if (leaksFloor(r.body, e.floor_inr)) (r as any).floor_warning = "This draft still mentions the internal floor. Edit it before approving.";
+  return r;
+}
+
 export async function counterOffer(e: EventProfile, c: any, offerInr: number, replySummary: string, firstName: string) {
   const system = `You are SponsorDesk A5, negotiating within the floor. ${RULES}
 Rules: trade value, never cut the price of the same package. Options: (A) a lower tier with the key deliverable kept and named items removed, (B) the package at their amount plus in-kind from them (valued at what it would cost us), (C) if cash is the blocker, a no-money model that fills our in-kind needs. Give to get: pair any addition with a decision date tied to a real production deadline.`;
-  const prompt = `${profileText(e)}\nCOMPANY: ${c.name}, offered INR ${offerInr}. Floor INR ${e.floor_inr}.\nTheir message summary: ${replySummary}\nReturn only <json>{"recommendation":"2-3 lines for the manager","subject":"Re: ...","body":"counter email, greet as Hi ${firstName}, under 130 words, no signature"}</json>`;
-  return (await claudeJson<{ recommendation: string; subject: string; body: string }>({ system, prompt, maxTokens: 2000 })).data;
+  const prompt = `${profileText(e)}\nCOMPANY: ${c.name}, offered INR ${offerInr}. Floor INR ${e.floor_inr}.\nTheir message summary: ${replySummary}\nReturn only <json>{"recommendation":"2-3 lines for the manager (the floor may be mentioned here only)","subject":"Re: ...","body":"counter email, greet as Hi ${firstName}, under 130 words, no signature, never mention the floor"}</json>`;
+  return noFloor(e, async (extra) => (await claudeJson<{ recommendation: string; subject: string; body: string }>({ system, prompt: prompt + extra, maxTokens: 2000 })).data);
 }
 
 // ---------- A6: MOU ----------
