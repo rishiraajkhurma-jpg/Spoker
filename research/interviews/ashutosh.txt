@@ -1,0 +1,119 @@
+00:00:00,920 --> 00:00:43,180 [Speaker 0]
+Uh, all right, so I'll answer questions one by one. Starting with, walk me through how you found and contacted your last sponsor. So currently, there are many fests going on in India. So there is one company that I just found on, who sponsored Antaragni of IIT Kanpur. So we just approached them via LinkedIn and mails. Uh, we shooted them mails as well. So we found mails through Apollo extension, and we did manual approaching through LinkedIn. And from there, around we approached to 20 people of the company, and we got reply from two, three, and then 
+
+00:00:44,800 --> 00:00:46,440 [Speaker 0]
+we finally converted the loop. 
+
+00:00:47,620 --> 00:00:52,440 [Speaker 0]
+Then, how many companies did you email, and how many replied or paid? So 
+
+00:00:53,520 --> 00:01:05,500 [Speaker 0]
+actually, from, let's say, I approached around 1,000 companies, and from each company, on an average, I approached around 10 to 15 people. So 
+
+00:01:07,100 --> 00:01:22,340 [Speaker 0]
+out of this 1,000 companies, I must have received a reply from around 150 or more companies, but the positive replies or the actual loops were found, formed from around 100 companies out of 1,000. 
+
+00:01:23,380 --> 00:01:30,600 [Speaker 0]
+Um, but most of them were, like, uh, not very strong loops. I must say, just received a dicey reply 
+
+00:01:31,640 --> 00:01:35,200 [Speaker 0]
+asking for more information or something [phone ringing] like that only. 
+
+00:01:36,500 --> 00:01:37,040 [Speaker 0]
+So yeah. 
+
+00:01:38,940 --> 00:02:04,460 [Speaker 0]
+What was the most frustrating and time-wasting part of getting sponsored? Firstly is making a DB. So when we are-- we decide a list of companies to approach, we have to make a database of relevant people. Let's say marketing heads, partnership heads, and whatever. That again depends on the company to company. If a company is having lot of people, then we prioritize, 
+
+00:02:05,660 --> 00:02:16,960 [Speaker 0]
+uh, Mumbai people head and heads. [phone ringing] And if not, uh, very Mum-- if the company doesn't has many people, then we 
+
+00:02:18,780 --> 00:02:29,340 [Speaker 0]
+have to, you know, look for any relevant person that we can have. And that is most frustrating part because it takes-- that is frustrating that it takes a lot of time. 
+
+00:02:30,580 --> 00:02:31,200 [Speaker 0]
+And, uh, 
+
+00:02:33,700 --> 00:02:45,440 [Speaker 0]
+yes, and when we spend a lot of time and we don't receive any reply from these people, it is frustrating. Tell me about a sponsor you lost or almost lost. What went wrong? 
+
+00:02:46,740 --> 00:02:47,040 [Speaker 0]
+So 
+
+00:02:48,400 --> 00:02:53,340 [Speaker 0]
+there are many sponsors that we lost. So few reasons would be 
+
+00:02:54,480 --> 00:02:55,960 [Speaker 0]
+that, uh, since 
+
+00:02:57,200 --> 00:03:09,620 [Speaker 0]
+we are not really very active on email, and they email at any random time, and we just get delayed in replying, so they also lose interest. 
+
+00:03:11,920 --> 00:03:14,720 [Speaker 0]
+Who has to approve any more email before it goes out? 
+
+00:03:15,880 --> 00:03:27,120 [Speaker 0]
+So it's just us people, organizing team member who review the email. We sometimes verify, cross-verify that using AI, like ChatGPT or Gemini, whatever, Claude. 
+
+00:03:28,900 --> 00:03:38,520 [Speaker 0]
+Uh, what would you hand to software? Okay, so, and what must stay with a human? Definitely, I would like software to analyze and find companies 
+
+00:03:39,640 --> 00:03:39,920 [Speaker 0]
+who, 
+
+00:03:41,040 --> 00:04:05,860 [Speaker 0]
+whom we can reach out. Let's say I'm a part of Techfest marketing team. So I would like a software to analyze all companies, all fests, whatever go-- is going around, and give me a list of companies, a priority list of companies whom should we approach for sponsorship. Let's say we have various events like RoboWars, concerts. So what software companies can be, you know, 
+
+00:04:07,860 --> 00:04:08,320 [Speaker 0]
+uh, 
+
+00:04:09,360 --> 00:04:33,080 [Speaker 0]
+specifically approached for specific events? Let's say there's RoboWars. So software should give me a list of 200 companies whom I can approach for specifically RoboWars. And then there is concerts, so the list of companies whom should I approach for, uh, uh, concerts. And not only the sh-- uh, the software should give me companies, it should also give me the database and 
+
+00:04:34,200 --> 00:04:49,100 [Speaker 0]
+database of people who is over there in the companies, right? Uh, what did you earn from sponsors? As a person, I haven't received anything, just connections. But, uh, 
+
+00:04:52,340 --> 00:05:05,700 [Speaker 0]
+yeah, the sponsorship amount, that is for the body, something that I've received from sponsors. But what would you realistically pay to get some more time and save time? So 
+
+00:05:07,820 --> 00:05:18,080 [Speaker 0]
+if my software is able to analyze company and also make a database for, out of it, I'm ready to pay 5,000, depending upon the credits. But let's say 
+
+00:05:19,280 --> 00:05:19,560 [Speaker 0]
+per 
+
+00:05:20,860 --> 00:05:23,000 [Speaker 0]
+200 companies approached, 
+
+00:05:24,060 --> 00:05:32,240 [Speaker 0]
+I am ready to pay my, uh, software 10,000 or 15,000 because the pool is charging already high, and, uh, this, 
+
+00:05:33,720 --> 00:05:38,460 [Speaker 0]
+this software will be approaching on my behalf. So yeah, I'm ready to pay higher amount. 
+
+00:05:41,040 --> 00:05:45,180 [Speaker 0]
+I, I missed the part where what must stay with a human. So 
+
+00:05:46,280 --> 00:05:48,140 [Speaker 0]
+in that, I'll say ki 
+
+00:05:49,560 --> 00:05:54,940 [Speaker 0]
+the approaching part should be with the software, but as soon as we get a reply or 
+
+00:05:56,440 --> 00:06:16,820 [Speaker 0]
+whenever the topic is about scheduling a meet or whenever the topic is about, uh, negotiation, the human must have a say in it, ki kitna negotiate karna hai and kitna amount finalize karna hai, kyunki that is very subjective and you cannot just rely on the software for it. 
+
+00:06:17,960 --> 00:06:21,800 [Speaker 0]
+A sponsor says yes, but only below your minimum price. 
+
+00:06:22,920 --> 00:06:30,920 [Speaker 0]
+We keep it on hold, we wait, we try to bring in other sponsors who are giving at our price, the price that we want. 
+
+00:06:32,180 --> 00:07:10,460 [Speaker 0]
+And we try to hold on the sponsor who is giving below our, uh, minimum price. And who decides? It's just us people, our team, marketing team only. A sponsor asks you to stop emailing this and like Hindi call or a strange restriction. What happens? We, uh, just give a sorry reply or something like that, we won't be approaching again. Sorry for any, any, any inconvenience or if any, if there is any strange reply in Hindi, like call me, there must be a contact number given. We just call them, call them at relevant office hours. 
+
+00:07:12,420 --> 00:07:32,120 [Speaker 0]
+What happens when a sponsor says yes on a call or WhatsApp, not email? How do you record it? Okay, so we sign a MOU then. If the positive response is not on mail, we frame a document and we take a signature on it that confirming that this company 
+
+00:07:33,160 --> 00:07:41,240 [Speaker 0]
+is coming for a sponsor. I hope this helps, and if, if you want any detailed answer for any question, please let me know.

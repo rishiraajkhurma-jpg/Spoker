@@ -4,6 +4,16 @@ Sponsorship brokerage agents for college fests and events: find sponsors with li
 
 Model: any OpenAI-compatible endpoint through `KIMI_K3` (an OpenRouter `sk-or-` key or a Moonshot key; default model Kimi K3) or `OPENROUTER_API_KEY`; Anthropic (`ANTHROPIC_API_KEY`) and Gemini (`GEMINI_API_KEY`) also work. Crustdata (`CRUSTDATA_API_KEY`) supplies company and people data.
 
+## Links
+
+| | |
+|---|---|
+| Live app | https://sponsordesk-blue.vercel.app/ |
+| Sample sponsor deck (Cult.fit x Aavhan) | https://sponsordesk-blue.vercel.app/d/5fa28c2a505a45ff8957 |
+| Demo walkthrough (Loom) | https://www.loom.com/share/4ec4186105f14dc88216a162973b5b2a |
+| User interviews (4 fest sponsorship leads) | [research/interviews](research/interviews/README.md) |
+| Standard deck and MOU used when the agent cannot produce one | [public/fallback](public/fallback) |
+
 ## What it does
 
 | Stage | Agent | In this app |
