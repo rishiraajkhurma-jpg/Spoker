@@ -31,10 +31,17 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS log (id TEXT PRIMARY KEY, ts TEXT, actor TEXT, company_id TEXT, action TEXT,
     from_stage TEXT, to_stage TEXT, detail TEXT)`,
   `CREATE TABLE IF NOT EXISTS decks (id TEXT PRIMARY KEY, company_id TEXT, json TEXT, created_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS schema_migrations (id INTEGER PRIMARY KEY, sql TEXT, applied_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS send_budget (k TEXT PRIMARY KEY, used INTEGER NOT NULL DEFAULT 0, last_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT UNIQUE NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL,
+    pw_hash TEXT NOT NULL, disabled INTEGER DEFAULT 0, created_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT, expires_at TEXT, revoked_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS login_attempts (id TEXT PRIMARY KEY, ip TEXT, ok INTEGER, at TEXT)`,
   `CREATE TABLE IF NOT EXISTS meetings (id TEXT PRIMARY KEY, company_id TEXT, n INTEGER, start_at TEXT, minutes INTEGER,
     meet_link TEXT, event_id TEXT, status TEXT, notes TEXT, digest TEXT, created_at TEXT)`,
 ];
-// Columns added after v1; each runs once and errors (already exists) are ignored.
+// Versioned migrations: each runs once and is recorded in schema_migrations. Only "already exists" errors are tolerated
+// (databases created before tracking existed); anything else stops startup instead of being swallowed.
 const MIGRATIONS = [
   `ALTER TABLE companies ADD COLUMN sources TEXT`,
   `ALTER TABLE companies ADD COLUMN meeting_count INTEGER DEFAULT 0`,
@@ -47,6 +54,12 @@ const MIGRATIONS = [
   `ALTER TABLE contacts ADD COLUMN linkedin_status TEXT`,
   `ALTER TABLE deals ADD COLUMN share_id TEXT`,
   `ALTER TABLE deals ADD COLUMN mou_pdf TEXT`,
+  `ALTER TABLE messages ADD COLUMN budget_keys TEXT`,
+  `CREATE INDEX IF NOT EXISTS messages_status_idx ON messages (status, scheduled_for)`,
+  `CREATE INDEX IF NOT EXISTS messages_company_idx ON messages (company_id, sequence)`,
+  `CREATE INDEX IF NOT EXISTS contacts_company_idx ON contacts (company_id)`,
+  `CREATE INDEX IF NOT EXISTS log_ts_idx ON log (ts)`,
+  `CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id)`,
 ];
 
 let injected: DB | null = null;
@@ -69,8 +82,15 @@ async function makeNeon(): Promise<DB> {
 export async function db(): Promise<DB> {
   const d = injected || cached || (cached = await makeNeon());
   if (!ready) ready = (async () => {
+    // Concurrent cold starts: CREATE IF NOT EXISTS and ON CONFLICT make this safe to run twice.
     for (const s of SCHEMA) await d.q(s);
-    for (const m of MIGRATIONS) { try { await d.q(m); } catch { /* column exists */ } }
+    const done = new Set((await d.q(`SELECT id FROM schema_migrations`)).map((r) => Number(r.id)));
+    for (let i = 0; i < MIGRATIONS.length; i++) {
+      if (done.has(i + 1)) continue;
+      try { await d.q(MIGRATIONS[i]); }
+      catch (e: any) { if (!/already exists|duplicate column/i.test(String(e?.message || e))) throw new Error(`Migration ${i + 1} failed: ${e?.message || e}`); }
+      await d.q(`INSERT INTO schema_migrations (id, sql, applied_at) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING`, [i + 1, MIGRATIONS[i], new Date().toISOString()]);
+    }
   })();
   await ready;
   return d;

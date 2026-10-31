@@ -112,7 +112,8 @@ export async function editDraft(key: string, subject: string, body: string) {
   return { ok: true };
 }
 
-export async function approve(key: string, who: string) {
+/** who: the approver's display name. verifiedHuman: the caller derived it from an authenticated session with an approver role. */
+export async function approve(key: string, who: string, verifiedHuman = false) {
   const d = await db();
   const m = (await d.q(`SELECT * FROM messages WHERE key=$1`, [key]))[0];
   if (!m || m.status !== "drafted") return { ok: false, reason: "not_drafted" };
@@ -120,12 +121,13 @@ export async function approve(key: string, who: string) {
   const w = (who || "").trim();
   if (AUTO_NAMES.has(w.toLowerCase())) {
     if (m.gate !== "auto" || (await humanReplyExists(m.company_id))) return { ok: false, reason: "needs_human_approver" };
-  } else {
+  } else if (!verifiedHuman) {
     const allowed = (await getSetting("approvers", "")).split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
     if (!allowed.length) return { ok: false, reason: "set approvers in Settings first" };
     if (!allowed.includes(w.toLowerCase())) return { ok: false, reason: "unknown_approver" };
   }
-  await d.q(`UPDATE messages SET status='approved', approved_by=$1 WHERE key=$2`, [w || "auto", key]);
+  const r = await d.q(`UPDATE messages SET status='approved', approved_by=$1 WHERE key=$2 AND status='drafted' RETURNING key`, [w || "auto", key]);
+  if (!r.length) return { ok: false, reason: "not_drafted" };
   await log(w || "auto", m.company_id, "approve", key);
   return { ok: true };
 }
@@ -148,22 +150,22 @@ export async function blockReason(m: any, at = new Date()): Promise<string | nul
   return null;
 }
 
-async function capReason(m: any): Promise<string | null> {
+/** Atomically take one unit of a daily budget. A single conditional UPDATE on one row: concurrent workers serialise on the
+ *  row lock and the WHERE is re-checked, so neither the cap nor the spacing can be exceeded. */
+async function reserve(k: string, cap: number, spacingSec: number): Promise<string> {
   const d = await db();
-  const c = await caps();
-  const day = istDayStart();
-  const total = num((await d.q(`SELECT COUNT(*) AS n FROM messages WHERE status='sent' AND sent_at >= $1`, [day]))[0]?.n);
-  if (total >= c.totalPerDay) return "CAP:total_per_day";
-  if (m.sequence === "cold" && num(m.step) === 0) {
-    const n = num((await d.q(`SELECT COUNT(*) AS n FROM messages WHERE status='sent' AND sequence='cold' AND step=0 AND sent_at >= $1`, [day]))[0]?.n);
-    if (n >= c.newPerDay) return "CAP:new_per_day";
-  }
-  const last = (await d.q(`SELECT MAX(sent_at) AS t FROM messages WHERE status='sent'`))[0]?.t;
-  if (last) {
-    const wait = c.spacingSec - Math.floor((Date.now() - new Date(last).getTime()) / 1000);
-    if (wait > 0) return `WAIT:${wait}`;
-  }
-  return null;
+  await d.q(`INSERT INTO send_budget (k, used, last_at) VALUES ($1, 0, '1970-01-01T00:00:00.000Z') ON CONFLICT (k) DO NOTHING`, [k]);
+  const now = Date.now();
+  const edge = new Date(now - spacingSec * 1000).toISOString();
+  const r = await d.q(`UPDATE send_budget SET used=used+1, last_at=$1 WHERE k=$2 AND used < $3 AND last_at <= $4 RETURNING used`, [new Date(now).toISOString(), k, cap, edge]);
+  if (r.length) return "OK";
+  const row = (await d.q(`SELECT used, last_at FROM send_budget WHERE k=$1`, [k]))[0];
+  if (num(row?.used) >= cap) return k.startsWith("new:") ? "CAP:new_per_day" : "CAP:total_per_day";
+  return `WAIT:${Math.max(1, spacingSec - Math.floor((now - new Date(row.last_at).getTime()) / 1000))}`;
+}
+async function refund(keys: string[]) {
+  const d = await db();
+  for (const k of keys) await d.q(`UPDATE send_budget SET used=used-1 WHERE k=$1 AND used > 0`, [k]);
 }
 
 export async function claim(key: string): Promise<string> {
@@ -172,18 +174,51 @@ export async function claim(key: string): Promise<string> {
   if (!m || m.status !== "approved") return "ALREADY";
   const br = await blockReason(m);
   if (br) {
-    if (br !== "not_yet" && br !== "not_approved") await d.q(`UPDATE messages SET status='cancelled', cancel_reason=$1 WHERE key=$2`, [br, key]);
+    if (br !== "not_yet" && br !== "not_approved") await d.q(`UPDATE messages SET status='cancelled', cancel_reason=$1 WHERE key=$2 AND status='approved'`, [br, key]);
     return "BLOCKED:" + br;
   }
-  const cr = await capReason(m);
-  if (cr) return cr;
-  const r = await d.q(`UPDATE messages SET status='claimed', claimed_at=$1 WHERE key=$2 AND status='approved' RETURNING key`, [nowIso(), key]);
-  return r.length === 1 ? "CLAIMED" : "ALREADY";
+  const c = await caps();
+  const day = istDayStart().slice(0, 10);
+  const keys: string[] = [];
+  const t = await reserve(`total:${day}`, c.totalPerDay, c.spacingSec);
+  if (t !== "OK") return t;
+  keys.push(`total:${day}`);
+  if (m.sequence === "cold" && num(m.step) === 0) {
+    const n = await reserve(`new:${day}`, c.newPerDay, 0);
+    if (n !== "OK") { await refund(keys); return n; }
+    keys.push(`new:${day}`);
+  }
+  const r = await d.q(`UPDATE messages SET status='claimed', claimed_at=$1, budget_keys=$2 WHERE key=$3 AND status='approved' RETURNING key`, [nowIso(), keys.join(","), key]);
+  if (r.length !== 1) { await refund(keys); return "ALREADY"; }
+  return "CLAIMED";
+}
+
+/** Gmail may or may not have delivered it (timeout, 5xx, or the DB write after sending failed). Never re-sent automatically. */
+export async function markUnknown(key: string, gmailId = "", threadId = "", why = "") {
+  const d = await db();
+  await d.q(`UPDATE messages SET status='send_unknown', gmail_id=COALESCE(NULLIF($1,''), gmail_id), thread_id=COALESCE(NULLIF($2,''), thread_id), cancel_reason=$3 WHERE key=$4 AND status='claimed'`, [gmailId, threadId, why.slice(0, 300), key]);
+}
+export async function markNeedsReview(key: string, why: string) {
+  const d = await db();
+  const r = await d.q(`UPDATE messages SET status='needs_manual_review', cancel_reason=$1 WHERE key=$2 AND status IN ('claimed','send_unknown') RETURNING company_id, to_email, subject`, [why.slice(0, 300), key]);
+  if (r[0]) await addException(r[0].company_id, "delivery_unknown", `Could not confirm whether "${r[0].subject}" reached ${r[0].to_email}. Check your Gmail Sent folder.`, "If it is in Sent, mark it sent. If not, resend it. It will not be resent automatically.");
+}
+/** Manual resolution of an uncertain delivery by an approver. */
+export async function resolveUnknown(key: string, outcome: "sent" | "resend", who: string) {
+  const d = await db();
+  if (outcome === "sent") {
+    const r = await d.q(`UPDATE messages SET status='sent', sent_at=COALESCE(claimed_at,$1), cancel_reason=$2 WHERE key=$3 AND status IN ('needs_manual_review','send_unknown') RETURNING company_id`, [nowIso(), `confirmed sent by ${who}`, key]);
+    if (r[0]) await log(who, r[0].company_id, "delivery_confirmed", key);
+    return { ok: !!r[0] };
+  }
+  const r = await d.q(`UPDATE messages SET status='approved', approved_by=$1, attempts=attempts+1, claimed_at=NULL WHERE key=$2 AND status IN ('needs_manual_review','send_unknown') RETURNING company_id`, [who, key]);
+  if (r[0]) await log(who, r[0].company_id, "resend_approved", key);
+  return { ok: !!r[0] };
 }
 
 export async function markSent(key: string, threadId: string, gmailId: string, rfcId = "") {
   const d = await db();
-  const r = await d.q(`UPDATE messages SET status='sent', sent_at=$1, thread_id=$2, gmail_id=$3, rfc_message_id=$4 WHERE key=$5 AND status='claimed' RETURNING *`,
+  const r = await d.q(`UPDATE messages SET status='sent', sent_at=$1, thread_id=$2, gmail_id=$3, rfc_message_id=$4 WHERE key=$5 AND status IN ('claimed','send_unknown','needs_manual_review') RETURNING *`,
     [nowIso(), threadId, gmailId, rfcId, key]);
   const m = r[0];
   if (!m) return { ok: false, reason: "not_claimed" };
@@ -199,9 +234,11 @@ export async function markSent(key: string, threadId: string, gmailId: string, r
   return { ok: true, next };
 }
 
+/** Only for failures where Gmail certainly did not accept the message (a 4xx rejection before sending). */
 export async function markFailed(key: string) {
   const d = await db();
-  await d.q(`UPDATE messages SET status='failed', attempts=attempts+1 WHERE key=$1 AND status='claimed'`, [key]);
+  const r = await d.q(`UPDATE messages SET status='failed', attempts=attempts+1 WHERE key=$1 AND status='claimed' RETURNING budget_keys`, [key]);
+  if (r[0]?.budget_keys) await refund(String(r[0].budget_keys).split(",").filter(Boolean));
 }
 export async function retry(key: string) {
   const d = await db();
@@ -226,7 +263,7 @@ export async function due(at = new Date()) {
 export async function reconcileLists() {
   const d = await db();
   const cutoff = Date.now() - 30 * 60 * 1000;
-  const stale = (await d.q(`SELECT * FROM messages WHERE status='claimed'`)).filter((r) => new Date(r.claimed_at).getTime() < cutoff);
+  const stale = (await d.q(`SELECT * FROM messages WHERE status IN ('claimed','send_unknown')`)).filter((r) => r.status === "send_unknown" || new Date(r.claimed_at).getTime() < cutoff);
   const missing: { next_key: string; contact_id: string; company_id: string; step: number; thread_id: string; subject: string; send_after: string }[] = [];
   for (const r of await d.q(`SELECT * FROM messages WHERE sequence='cold' AND status='sent'`)) {
     const s = num(r.step);

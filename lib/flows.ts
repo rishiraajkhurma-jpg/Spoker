@@ -119,7 +119,7 @@ export async function runAnalyze(companyId: string) {
     await L.addException(companyId, "no_contact", `No decision maker found for ${co.name}.`, "Add a contact by hand or ask the team for a warm intro.");
     return { priority, dropped: false, contact: false };
   }
-  const email = ct.email && /@/.test(ct.email) ? ct.email.trim() : "";
+  const email = ct.email && G.SAFE_EMAIL.test(String(ct.email).trim()) ? String(ct.email).trim() : "";
   const cid = `${companyId}--${slug(email || ct.full_name)}`;
   await d.q(`INSERT INTO contacts (id, company_id, full_name, position, email, email_status, email_source, phone, linkedin_url, one_liner, context, hook, iitb_alum, warm_path, source, status, is_primary, linkedin_note, linkedin_dm, linkedin_status, created_at)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'active',1,$16,$17,'to_send',$18) ON CONFLICT (id) DO UPDATE SET linkedin_note=excluded.linkedin_note, linkedin_dm=excluded.linkedin_dm`,
@@ -150,7 +150,7 @@ export async function queueOffer(companyId: string) {
 }
 
 export async function setContactEmail(contactId: string, email: string) {
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("That does not look like an email address.");
+  if (!G.SAFE_EMAIL.test(email.trim())) throw new Error("That does not look like an email address.");
   const d = await db();
   await d.q(`UPDATE contacts SET email=$1, email_status='manual', email_source='added by manager' WHERE id=$2`, [email.trim(), contactId]);
   const ct = (await d.q(`SELECT * FROM contacts WHERE id=$1`, [contactId]))[0];
@@ -202,21 +202,38 @@ export async function sendDue(budgetMs = 200000) {
       break;
     }
     if (c !== "CLAIMED") { out.push(`${m.key}: ${c}`); continue; }
+    // Pre-send revalidation: an opt-out or reply may have landed between due() and claim().
+    const again = await L.blockReason({ ...m, status: "approved" });
+    if (again && again !== "not_yet") { await L.markFailed(m.key); const d1 = await db(); await d1.q(`UPDATE messages SET status='cancelled', cancel_reason=$1 WHERE key=$2 AND status='failed'`, [again, m.key]); out.push(`${m.key}: cancelled before sending (${again})`); continue; }
+    let prev: any = null;
+    try { prev = await lastSent(m.contact_id); } catch (err: any) { await L.markFailed(m.key).catch(() => {}); out.push(`${m.key}: not sent (database): ${err.message}`); continue; }
+    let r: { id: string; threadId: string; rfcId: string };
     try {
-      const prev = await lastSent(m.contact_id);
-      const r = await G.send({ to: m.to_email, subject: m.subject, body: m.body, threadId: prev?.thread_id || null, inReplyTo: prev?.rfc_message_id || null, fromName: e?.sender?.name });
-      const s = await L.markSent(m.key, r.threadId, r.id, r.rfcId);
-      sent++;
-      await L.log("Email", m.company_id, "sent", `${m.subject} to ${m.to_email}`);
-      if (s.next) {
+      r = await G.send({ to: m.to_email, subject: m.subject, body: m.body, threadId: prev?.thread_id || null, inReplyTo: prev?.rfc_message_id || null, fromName: e?.sender?.name });
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      // Only a 4xx rejection (or no token) proves Gmail did not send it. Timeouts and 5xx are ambiguous.
+      const definite = (/^Gmail 4\d\d/.test(msg) && !/^Gmail (408|429)/.test(msg)) || /not connected|token refresh failed/i.test(msg);
+      if (definite) { await L.markFailed(m.key); out.push(`${m.key}: not sent: ${msg.slice(0, 160)}`); }
+      else { await L.markUnknown(m.key, "", "", msg); out.push(`${m.key}: delivery uncertain; it will be checked against Sent and never resent automatically.`); }
+      continue;
+    }
+    sent++;
+    let s: { ok: boolean; next?: any };
+    try { s = await L.markSent(m.key, r.threadId, r.id, r.rfcId); }
+    catch (err: any) {
+      // Gmail accepted it but we could not record that. Never mark it failed (that would resend it).
+      await L.markUnknown(m.key, r.id, r.threadId, "sent; saving failed: " + err.message).catch(() => {});
+      out.push(`${m.key}: sent, but the record could not be saved; reconcile will confirm it from Gmail.`);
+      continue;
+    }
+    await L.log("Email", m.company_id, "sent", `${m.subject} to ${m.to_email}`).catch(() => {});
+    if (s.next) {
+      try {
         const d = await db();
         const cur = (await d.q(`SELECT * FROM messages WHERE key=$1`, [m.key]))[0];
-        try { await draftFollowUp({ next_key: s.next.key, contact_id: m.contact_id, company_id: m.company_id, step: num(cur.step) + 1, subject: cur.subject, send_after: s.next.after }); }
-        catch (err: any) { out.push(`Follow-up draft failed (reconcile will retry): ${err.message}`); }
-      }
-    } catch (err: any) {
-      await L.markFailed(m.key);
-      out.push(`${m.key}: send failed: ${err.message}`);
+        await draftFollowUp({ next_key: s.next.key, contact_id: m.contact_id, company_id: m.company_id, step: num(cur.step) + 1, subject: cur.subject, send_after: s.next.after });
+      } catch (err: any) { out.push(`Follow-up draft failed (reconcile will retry): ${err.message}`); }
     }
   }
   return { sent, notes: out };
@@ -285,14 +302,23 @@ export async function reconcile() {
   const notes: string[] = [];
   const gmailOn = !!(await G.connectedEmail());
   for (const m of stale) {
-    if (!gmailOn) { notes.push(`stale ${m.key}: connect Gmail to verify`); continue; }
-    const after = Math.floor(new Date(m.claimed_at).getTime() / 1000) - 120;
-    const hits = await G.searchSent(m.to_email, after).catch(() => []);
+    if (!gmailOn) { notes.push(`uncertain ${m.key}: connect Gmail to verify`); continue; }
     let match: any = null;
-    for (const h of hits) if ((await L.sha16(h.text)) === m.body_hash) { match = h; break; }
-    if (match) { await L.markSent(m.key, match.threadId, match.id, match.rfcId); notes.push(`recovered ${m.key} as sent`); }
-    else { await L.markFailed(m.key); notes.push(`${m.key}: ${await L.retry(m.key)}`); }
+    if (m.gmail_id) match = await G.getMessage(m.gmail_id).catch(() => null);
+    if (!match) {
+      const after = Math.floor(new Date(m.claimed_at).getTime() / 1000) - 120;
+      const hits = await G.searchSent(m.to_email, after).catch(() => []);
+      for (const h of hits) if ((await L.sha16(h.text)) === m.body_hash) { match = h; break; }
+    }
+    if (match) { await L.markSent(m.key, match.threadId, match.id, match.rfcId); notes.push(`confirmed ${m.key} as sent`); continue; }
+    // Gmail search can lag: wait, then hand it to a person. Never resend automatically.
+    const age = Date.now() - new Date(m.claimed_at).getTime();
+    if (age < 6 * 3600 * 1000) notes.push(`${m.key}: not in Sent yet, checking again next run`);
+    else { await L.markNeedsReview(m.key, "not found in Gmail Sent after 6 hours"); notes.push(`${m.key}: needs a person to check Sent`); }
   }
+  // Definite failures (Gmail rejected them, nothing was sent) are retried up to 3 times; then a person decides.
+  const d = await db();
+  for (const f of await d.q(`SELECT key FROM messages WHERE status='failed'`)) notes.push(`${f.key}: ${await L.retry(f.key)}`);
   for (const n of missing) {
     try { await draftFollowUp(n); notes.push(`queued missing ${n.next_key}`); } catch (err: any) { notes.push(`missing ${n.next_key}: ${err.message}`); }
   }

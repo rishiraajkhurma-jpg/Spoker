@@ -46,7 +46,7 @@ async function accessToken() {
 
 async function api(path: string, init: RequestInit = {}) {
   const t = await accessToken();
-  const res = await fetch(`${G}${path}`, { ...init, headers: { ...(init.headers || {}), authorization: `Bearer ${t}`, "content-type": "application/json" } });
+  const res = await fetch(`${G}${path}`, { ...init, headers: { ...(init.headers || {}), authorization: `Bearer ${t}`, "content-type": "application/json" }, signal: AbortSignal.timeout(30000) });
   const j: any = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Gmail ${res.status}: ${JSON.stringify(j).slice(0, 300)}`);
   return j;
@@ -56,7 +56,10 @@ const b64 = (s: string) => Buffer.from(s, "utf-8").toString("base64");
 const b64url = (s: string) => b64(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const encHeader = (s: string) => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${b64(s)}?=`);
 
+export const SAFE_EMAIL = /^[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 export async function send(o: { to: string; subject: string; body: string; threadId?: string | null; inReplyTo?: string | null; fromName?: string }) {
+  if (!SAFE_EMAIL.test(o.to || "")) throw new Error("Gmail 400: refused unsafe recipient address");
+  if (/[\r\n]/.test(o.subject + (o.fromName || "") + (o.inReplyTo || ""))) throw new Error("Gmail 400: refused header with a line break");
   const from = await connectedEmail();
   const lines = [
     `From: ${o.fromName ? `${encHeader(o.fromName)} <${from}>` : from}`,
@@ -94,6 +97,10 @@ function header(m: any, name: string) {
 export type GMsg = { id: string; threadId: string; from: string; to: string; subject: string; date: string; rfcId: string; text: string };
 function toMsg(m: any): GMsg {
   return { id: m.id, threadId: m.threadId, from: header(m, "From"), to: header(m, "To"), subject: header(m, "Subject"), date: header(m, "Date"), rfcId: header(m, "Message-ID"), text: plainText(m.payload) || m.snippet || "" };
+}
+
+export async function getMessage(id: string): Promise<GMsg> {
+  return toMsg(await api(`/messages/${encodeURIComponent(id)}?format=full`));
 }
 
 export async function thread(threadId: string): Promise<GMsg[]> {
