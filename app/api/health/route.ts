@@ -2,7 +2,7 @@
 import { guard } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { McpClient } from "@/lib/mcp";
-import { model } from "@/lib/claude";
+import { model, provider } from "@/lib/claude";
 import { connectedEmail } from "@/lib/gmail";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,8 @@ export async function GET(req: Request) {
   const g = await guard(req); if (g) return g;
   const out: Record<string, any> = {};
   out.database = await check(async () => { const d = await db(); await d.q("SELECT 1"); return "connected"; });
-  out.claude = !process.env.ANTHROPIC_API_KEY ? { ok: false, detail: "ANTHROPIC_API_KEY not set" } : await check(async () => {
+  out.provider = provider();
+  if (provider() === "anthropic") out.claude = !process.env.ANTHROPIC_API_KEY ? { ok: false, detail: "ANTHROPIC_API_KEY not set" } : await check(async () => {
     const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": process.env.ANTHROPIC_API_KEY as string, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify({ model: model("anthropic"), max_tokens: 5, messages: [{ role: "user", content: "Reply OK" }] }) });
     const j: any = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(`${r.status}: ${j?.error?.message || JSON.stringify(j).slice(0, 200)}`);

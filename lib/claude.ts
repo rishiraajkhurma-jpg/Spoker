@@ -46,7 +46,8 @@ function friendly(msg: string, who: string) {
   return friendlyCore(msg, who) + ` [${msg.replace(/\s+/g, " ").slice(0, 220)}]`;
 }
 function friendlyCore(msg: string, who: string) {
-  if (who === "Claude" && /credit balance|billing/i.test(msg)) return `${who}: the account has no credit. Add credit (console.anthropic.com > Plans & Billing) or add a working GEMINI_API_KEY in Vercel.`;
+  if (who === "Claude" && /credit balance|billing/i.test(msg)) return `${who}: the account has no credit. Add OPENROUTER_API_KEY in Vercel to use OpenRouter instead.`;
+  if (who === "OpenRouter" && /402|credit|insufficient/i.test(msg)) return `${who}: the key is out of credit. Top up at openrouter.ai/settings/credits.`;
   if (/401|403|invalid x-api-key|authentication|UNAUTHENTICATED|PERMISSION_DENIED/i.test(msg)) return `${who}: the API key was rejected. Check it in Vercel > Settings > Environment Variables.`;
   if (/quota|RESOURCE_EXHAUSTED|429|rate.?limit/i.test(msg)) return `${who}: quota or rate limit reached. Wait a minute or raise the limit.`;
   return `${who} failed.`;
@@ -63,7 +64,8 @@ export async function claude(opts: Opts): Promise<ClaudeResult> {
     // pick a fallback with a key
     const candidates = ["openrouter", "anthropic", "gemini"].filter(p => p !== first);
     const keys: Record<string, string | undefined> = { openrouter: process.env.OPENROUTER_API_KEY, anthropic: process.env.ANTHROPIC_API_KEY, gemini: process.env.GEMINI_API_KEY };
-    const other = candidates.find(p => keys[p]);
+    // OpenRouter is the single provider when its key is set: no fallback to other accounts.
+    const other = first === "openrouter" ? undefined : candidates.find(p => keys[p]);
     if (other && SWITCHABLE.test(msg) && left(opts) > 60000) {
       try { return await run(other); }
       catch (e2: any) { throw new Error(`${friendly(msg, label(first))} Fallback also failed. ${friendly(String(e2?.message || e2), label(other))}`); }
