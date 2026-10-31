@@ -24,6 +24,12 @@ export async function GET(req: Request) {
     if (!r.ok) throw new Error(`${r.status}: ${j?.error?.message || JSON.stringify(j).slice(0, 200)}`);
     return `${model("anthropic")} replied`;
   });
+  out.openrouter = !process.env.OPENROUTER_API_KEY ? { ok: false, detail: "OPENROUTER_API_KEY not set (optional)" } : await check(async () => {
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json", "HTTP-Referer": "https://sponsordesk-blue.vercel.app", "X-Title": "SponsorDesk" }, body: JSON.stringify({ model: model("openrouter"), max_tokens: 5, messages: [{ role: "user", content: "Reply OK" }] }) });
+    const j: any = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(`${r.status}: ${j?.error?.message || JSON.stringify(j).slice(0, 200)}`);
+    return `${model("openrouter")} replied`;
+  });
   out.gemini = !process.env.GEMINI_API_KEY ? { ok: false, detail: "GEMINI_API_KEY not set (optional)" } : await check(async () => {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model("gemini")}:generateContent`, { method: "POST", headers: { "x-goog-api-key": process.env.GEMINI_API_KEY as string, "content-type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "Reply OK" }] }], generationConfig: { maxOutputTokens: 5 } }) });
     const j: any = await r.json().catch(() => ({}));

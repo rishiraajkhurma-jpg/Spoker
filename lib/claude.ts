@@ -1,6 +1,7 @@
-// LLM layer. Two providers behind one function:
-//  - Claude (ANTHROPIC_API_KEY, default): Messages API, web search server tool, Crustdata via the remote MCP connector.
+// LLM layer. Three providers behind one function:
+//  - Claude (ANTHROPIC_API_KEY): Messages API, web search server tool, Crustdata via the remote MCP connector.
 //  - Gemini (GEMINI_API_KEY): generateContent, Google Search grounding, Crustdata via our own MCP client.
+//  - OpenRouter (OPENROUTER_API_KEY): OpenAI-compatible API, Crustdata via our own MCP client.
 // Research data source: Crustdata when CRUSTDATA_API_KEY is set, otherwise live web search with cited URLs.
 import { McpClient } from "./mcp";
 
@@ -18,17 +19,24 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 }
 const sig = (o: Opts) => AbortSignal.timeout(Math.max(5000, left(o)));
 
-export function provider(): "gemini" | "anthropic" {
+export function provider(): "gemini" | "anthropic" | "openrouter" {
   const p = (process.env.LLM_PROVIDER || "").toLowerCase();
-  if (p === "gemini" || p === "anthropic") return p;
+  if (p === "gemini" || p === "anthropic" || p === "openrouter") return p as any;
+  if (process.env.OPENROUTER_API_KEY) return "openrouter";
   if (process.env.ANTHROPIC_API_KEY) return "anthropic";
   return process.env.GEMINI_API_KEY ? "gemini" : "anthropic";
 }
 export function model(p: string = provider()) {
+  if (p === "openrouter") return process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
   if (p === "gemini") return process.env.GEMINI_MODEL || (process.env.SD_MODEL && !process.env.SD_MODEL.startsWith("claude") ? process.env.SD_MODEL : "gemini-3.8-flash");
   return process.env.SD_MODEL && process.env.SD_MODEL.startsWith("claude") ? process.env.SD_MODEL : "claude-sonnet-5-5";
 }
-export function hasClaude() { return provider() === "gemini" ? !!process.env.GEMINI_API_KEY : !!process.env.ANTHROPIC_API_KEY; }
+export function hasClaude() {
+  const p = provider();
+  if (p === "openrouter") return !!process.env.OPENROUTER_API_KEY;
+  if (p === "gemini") return !!process.env.GEMINI_API_KEY;
+  return !!process.env.ANTHROPIC_API_KEY;
+}
 export function hasCrustdata() { return !!process.env.CRUSTDATA_API_KEY; }
 export function dataSource() { return hasCrustdata() ? "crustdata" : "web"; }
 
@@ -46,18 +54,21 @@ function friendlyCore(msg: string, who: string) {
 export async function claude(opts: Opts): Promise<ClaudeResult> {
   opts = { ...opts, deadline: opts.deadline || Date.now() + HARD_MS };
   const first = provider();
-  const run = (p: string) => (p === "gemini" ? gemini(opts) : anthropic(opts));
+  const run = (p: string) => p === "gemini" ? gemini(opts) : p === "openrouter" ? openrouter(opts) : anthropic(opts);
+  const label = (p: string) => p === "gemini" ? "Gemini" : p === "openrouter" ? "OpenRouter" : "Claude";
   try {
     return await run(first);
   } catch (e: any) {
-    const other = first === "gemini" ? "anthropic" : "gemini";
-    const otherKey = other === "gemini" ? process.env.GEMINI_API_KEY : process.env.ANTHROPIC_API_KEY;
     const msg = String(e?.message || e);
-    if (otherKey && SWITCHABLE.test(msg) && left(opts) > 60000) {
+    // pick a fallback with a key
+    const candidates = ["openrouter", "anthropic", "gemini"].filter(p => p !== first);
+    const keys: Record<string, string | undefined> = { openrouter: process.env.OPENROUTER_API_KEY, anthropic: process.env.ANTHROPIC_API_KEY, gemini: process.env.GEMINI_API_KEY };
+    const other = candidates.find(p => keys[p]);
+    if (other && SWITCHABLE.test(msg) && left(opts) > 60000) {
       try { return await run(other); }
-      catch (e2: any) { throw new Error(`${friendly(msg, first === "gemini" ? "Gemini" : "Claude")} Fallback also failed. ${friendly(String(e2?.message || e2), other === "gemini" ? "Gemini" : "Claude")}`); }
+      catch (e2: any) { throw new Error(`${friendly(msg, label(first))} Fallback also failed. ${friendly(String(e2?.message || e2), label(other))}`); }
     }
-    throw new Error(friendly(msg, first === "gemini" ? "Gemini" : "Claude"));
+    throw new Error(friendly(msg, label(first)));
   }
 }
 
@@ -116,6 +127,74 @@ async function anthropic(opts: Opts): Promise<ClaudeResult> {
   // The final answer is the text of the last response (earlier turns may hold partial narration).
   const finalText = (last?.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
   return { text: finalText || texts.join("\n"), toolCalls, sources, usage: last?.usage, stop: last?.stop_reason };
+}
+
+// ---------------- OpenRouter ----------------
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+
+async function openrouter(opts: Opts): Promise<ClaudeResult> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error("OPENROUTER_API_KEY is not set.");
+  let mcp: McpClient | null = null;
+  const nameMap = new Map<string, string>();
+  const toolDefs: any[] = [];
+  if (opts.crustdata && hasCrustdata()) {
+    mcp = new McpClient(CRUSTDATA_MCP, process.env.CRUSTDATA_API_KEY as string);
+    await withTimeout(mcp.init(), 20000, "Crustdata connect");
+    const decls = (await withTimeout(mcp.tools(), 20000, "Crustdata tool list")).slice(0, 60);
+    for (const t of decls) {
+      const n = t.name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 63);
+      nameMap.set(n, t.name);
+      toolDefs.push({ type: "function", function: { name: n, description: (t.description || "").slice(0, 800), parameters: t.inputSchema || { type: "object", properties: {} } } });
+    }
+  }
+  const messages: any[] = [{ role: "system", content: opts.system }, { role: "user", content: opts.prompt }];
+  const toolCalls: { name: string; input: any }[] = [];
+  const sources: Source[] = [];
+  let last: any = null;
+  let text = "";
+  const started = Date.now();
+  let wrapped = false;
+  for (let turn = 0; turn < 12; turn++) {
+    if (left(opts) < 8000) throw new Error("The research took too long. Try again or ask for fewer companies.");
+    if (!wrapped && toolDefs.length && toolTimeUp(opts, started)) {
+      wrapped = true;
+      messages.push({ role: "user", content: "Time is up. Do not call any more tools. Give your final answer now in the requested format." });
+    }
+    const body: any = { model: model("openrouter"), messages, max_tokens: opts.maxTokens || 8000 };
+    if (toolDefs.length && !wrapped) body.tools = toolDefs;
+    let res: Response;
+    try {
+      res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json", "HTTP-Referer": "https://sponsordesk-blue.vercel.app", "X-Title": "SponsorDesk" },
+        body: JSON.stringify(body),
+        signal: sig(opts),
+      });
+    } catch (e: any) {
+      throw new Error(/abort|timeout/i.test(String(e?.name) + e?.message) ? "The research took too long. Try again or ask for fewer companies." : String(e?.message || e));
+    }
+    if (!res.ok) throw new Error(`OpenRouter API ${res.status}: ${(await res.text()).slice(0, 500)}`);
+    last = await res.json();
+    const msg = last.choices?.[0]?.message;
+    text = msg?.content || "";
+    const calls = msg?.tool_calls || [];
+    if (!calls.length || !mcp || wrapped) break;
+    messages.push({ role: "assistant", content: msg.content || null, tool_calls: calls });
+    for (const tc of calls) {
+      const fn = tc.function;
+      const real = nameMap.get(fn.name) || fn.name;
+      let args: any = {};
+      try { args = JSON.parse(fn.arguments || "{}"); } catch { /* ignore */ }
+      toolCalls.push({ name: real, input: args });
+      let result: string;
+      try { result = await withTimeout(mcp.call(real, args), Math.min(TOOL_CALL_MS, left(opts) - ANSWER_MS + 20000), "Crustdata call"); } catch (e: any) { result = "ERROR: " + e.message; }
+      messages.push({ role: "tool", tool_call_id: tc.id, content: result.slice(0, 9000) });
+    }
+    if (turn === 7 && !wrapped) { wrapped = true; messages.push({ role: "user", content: "Stop calling tools now and give your final answer in the requested format." }); }
+  }
+  harvestUrls(sources, text, 12);
+  return { text, toolCalls, sources, usage: last?.usage, stop: last?.choices?.[0]?.finish_reason || "" };
 }
 
 // ---------------- Gemini ----------------
