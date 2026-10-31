@@ -63,6 +63,13 @@ export const POST = wrap(async (req) => {
       for (const k of ["approvers", "cap_new_per_day", "cap_total_per_day", "spacing_sec", "organiser_permission"]) if (b[k] !== undefined) await setSetting(k, String(b[k]));
       return { ok: true };
     }
+    case "reset": {
+      if (b.confirm !== "RESET") throw new Error("Type RESET to confirm");
+      const d = await db();
+      for (const tb of ["companies", "contacts", "messages", "replies", "exceptions", "deals", "meetings", "decks", "log", "events"]) await d.q(`DELETE FROM ${tb}`);
+      await L.log("manager", null, "reset", "Desk cleared");
+      return { ok: true };
+    }
     case "suppress": await L.suppress(b.email, "manual"); return { ok: true };
     case "forget": return { erased: await L.forget(b.email) };
     default: throw new Error("unknown op " + b.op);

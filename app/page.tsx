@@ -291,6 +291,7 @@ function BriefCard({ e, act, busy, approver }: Any) {
     <div className="panel">
       <div className="spread"><div><h2>A0 packaged your event. Check it, then lock the floor.</h2><p className="sub">Researched from {e.sources?.length || 0} web sources. Prices are suggestions until you lock them.</p></div>
         <button className="btn ghost" onClick={() => setEdit(edit ? null : JSON.parse(JSON.stringify(e)))}>{edit ? "Cancel edit" : "Edit details"}</button></div>
+      <Redo e={e} act={act} busy={busy} />
       {edit ? <BriefEdit e={edit} setE={setEdit} done={() => setEdit(null)} /> : <>
         <dl className="kv">
           <dt>Audience</dt><dd>{e.audience}</dd>
@@ -308,6 +309,16 @@ function BriefCard({ e, act, busy, approver }: Any) {
         </div>
         <Sources list={e.sources} />
       </>}
+    </div>
+  );
+}
+
+function Redo({ e, act, busy }: Any) {
+  const [line, setLine] = useState("");
+  return (
+    <div className="row" style={{ margin: "4px 0 14px" }}>
+      <input value={line} onChange={(x) => setLine(x.target.value)} placeholder="Not right? Describe the event in one line and A0 researches it again" style={{ flex: 1, minWidth: 260 }} />
+      <button className="btn ghost" disabled={!!busy || !line} onClick={() => act("brief", { line, sender: e.sender || {} }, "Researching the event and pricing the tiers").then(() => setLine(""))}>{busy ? "Researching..." : "Research again"}</button>
     </div>
   );
 }
@@ -827,6 +838,10 @@ function Settings({ data, act, flash }: Any) {
           <input value={v.organiser_permission} placeholder="e.g. E-Cell OC email, 31 Oct 2026" onChange={(e) => setV({ ...v, organiser_permission: e.target.value })} />
           <div className="row" style={{ marginTop: 10 }}><button className="btn" onClick={() => act("settings", v, "Saving").then((r: Any) => r && flash("Saved"))}>Save rules</button></div>
         </div>
+      </div>
+      <div className="panel">
+        <h2>Start over</h2><p className="sub">Clears every company, contact, email, meeting, deck and deal, and the event brief. Settings and the Google connection stay.</p>
+        <button className="btn danger" onClick={() => { const t = prompt("Type RESET to clear the desk"); if (t === "RESET") act("reset", { confirm: "RESET" }, "Clearing the desk").then((r: Any) => r && flash("Desk cleared")); }}>Reset desk</button>
       </div>
       <div className="panel">
         <h2>People and data</h2><p className="sub">Opt-outs are permanent. Erasing removes a person's details and keeps only a hash so they are never contacted again (DPDP Act 2023).</p>
