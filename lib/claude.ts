@@ -131,11 +131,20 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
   const contents: any[] = [{ role: "user", parts: [{ text: opts.prompt }] }];
   let last: any = null;
   let text = "";
+  const gModels = [...new Set([model("gemini"), "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"])];
+  let gm = 0;
   for (let turn = 0; turn < 16; turn++) {
     const body: any = { systemInstruction: { parts: [{ text: opts.system }] }, contents, generationConfig: { maxOutputTokens: Math.max(opts.maxTokens || 8000, 2048) } };
     if (tools) body.tools = tools;
-    const res = await fetch(`${GEMINI}/${model("gemini")}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error(`Gemini API ${res.status}: ${(await res.text()).slice(0, 500)}`);
+    let res: Response | null = null;
+    let errText = "";
+    for (let mi = gm; mi < gModels.length; mi++) {
+      res = await fetch(`${GEMINI}/${gModels[mi]}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body) });
+      if (res.ok) { gm = mi; break; }
+      errText = (await res.text()).slice(0, 500);
+      if (![404, 429].includes(res.status)) break; // only quota / unknown model move to a lighter model
+    }
+    if (!res || !res.ok) throw new Error(`Gemini API ${res?.status}: ${errText}`);
     last = await res.json();
     const cand = last.candidates?.[0];
     for (const ch of cand?.groundingMetadata?.groundingChunks || []) addSource(sources, ch.web?.uri, ch.web?.title);
