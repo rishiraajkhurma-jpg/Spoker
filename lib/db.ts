@@ -46,6 +46,7 @@ const MIGRATIONS = [
   `ALTER TABLE contacts ADD COLUMN linkedin_dm TEXT`,
   `ALTER TABLE contacts ADD COLUMN linkedin_status TEXT`,
   `ALTER TABLE deals ADD COLUMN share_id TEXT`,
+  `ALTER TABLE deals ADD COLUMN mou_pdf TEXT`,
 ];
 
 let injected: DB | null = null;

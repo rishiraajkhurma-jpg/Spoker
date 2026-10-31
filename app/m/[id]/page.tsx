@@ -44,9 +44,11 @@ export default function MouPage() {
     <div style={{ padding: "32px 16px 60px", minHeight: "100vh" }}>
       <div className="row noprint" style={{ maxWidth: 820, margin: "0 auto 14px", justifyContent: "space-between" }}>
         <span className="muted">{d ? `${d.company}, ${d.tier} partnership` : ""}</span>
-        <button className="btn ghost" onClick={() => window.print()}>Save as PDF</button>
+        {d?.mou_pdf ? <a className="btn ghost" href={d.mou_pdf} download="MOU.pdf">Download PDF</a> : <button className="btn ghost" onClick={() => window.print()}>Save as PDF</button>}
       </div>
-      {err ? <div className="doc">{err}</div> : !d ? <div className="doc">Loading...</div> : <article className="doc" dangerouslySetInnerHTML={{ __html: md(d.mou || "") }} />}
+      {err ? <div className="doc">{err}</div> : !d ? <div className="doc">Loading...</div>
+        : d.mou_pdf ? <object className="pdf-view" data={d.mou_pdf} type="application/pdf" aria-label="MOU"><div className="doc"><a href={d.mou_pdf}>Open the MOU (PDF)</a></div></object>
+        : <article className="doc" dangerouslySetInnerHTML={{ __html: md(d.mou || "") }} />}
     </div>
   );
 }

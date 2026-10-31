@@ -1,7 +1,7 @@
 // SponsorDesk agents A0-A7, condensed from the skill pack. Every agent returns structured JSON with sources.
 import { claude, claudeJson, hasCrustdata, Source } from "./claude";
 import { fixDashes } from "./lint";
-import { verifySources, CheckedSource } from "./verify";
+import { verifySources, type CheckedSource } from "./verify";
 export type { Source } from "./claude";
 
 export type Tier = { name: string; price_inr: number; deliverables: string };

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --experimental-strip-types --no-warnings scripts/test-ledger.ts"
+    "test": "tsx scripts/test-ledger.ts",
+    "test:flows": "tsx scripts/test-flows.ts",
+    "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",
@@ -18,7 +20,10 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "tsx": "^4.23.12"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }

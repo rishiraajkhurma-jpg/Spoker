@@ -46,6 +46,19 @@ export default function DeckPage() {
   if (err) return <div className="deck"><p className="deck-msg">{err}</p></div>;
   if (!deck) return <div className="deck"><p className="deck-msg">Loading the deck…</p></div>;
   const ev = deck.event || {};
+  if (deck.fallback_pdf) {
+    return (
+      <div className="deck">
+        <header className="deck-bar noprint">
+          <span><b>{deck.company}</b> × {ev.name}</span>
+          <a className="btn ghost" href={deck.fallback_pdf} download="Sponsorship-deck.pdf">Download PDF</a>
+        </header>
+        <object className="pdf-view" data={deck.fallback_pdf} type="application/pdf" aria-label="Sponsorship deck">
+          <p className="deck-msg"><a href={deck.fallback_pdf}>Open the sponsorship deck (PDF)</a></p>
+        </object>
+      </div>
+    );
+  }
   const slides: Any[] = deck.slides || [];
   const total = slides.length + (deck.one_pager ? 1 : 0);
   const meta = [ev.dates, ev.city].filter(Boolean).join(" · ");

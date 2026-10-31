@@ -108,6 +108,7 @@ async function anthropic(opts: Opts): Promise<ClaudeResult> {
   const sources: Source[] = [];
   let last: any = null;
   const texts: string[] = [];
+  const seen = new Set<string>();
   const started = Date.now();
   for (let turn = 0; turn < 8; turn++) {
     const body: any = { ...body0, model: model("anthropic"), max_tokens: opts.maxTokens || 8000, system: opts.system, messages };
@@ -119,7 +120,8 @@ async function anthropic(opts: Opts): Promise<ClaudeResult> {
     last = await res.json();
     for (const b of last.content || []) {
       if (b.type === "mcp_tool_use" || b.type === "server_tool_use") toolCalls.push({ name: b.name, input: b.input });
-      if (b.type === "web_search_tool_result" && Array.isArray(b.content)) for (const r of b.content) addSource(sources, r.url, r.title);
+      if (b.type === "web_search_tool_result" && Array.isArray(b.content)) for (const r of b.content) { addSource(sources, r.url, r.title); if (r.url) seen.add(r.url); }
+      if (b.type === "mcp_tool_result") for (const u of JSON.stringify(b.content || "").match(/https?:\/\/[^\s"'<>)\]\\,]+/g) || []) seen.add(u.replace(/[.;:]+$/, ""));
       if (b.type === "text") {
         texts.push(b.text);
         for (const c of b.citations || []) addSource(sources, c.url, c.title);
@@ -138,7 +140,7 @@ async function anthropic(opts: Opts): Promise<ClaudeResult> {
   }
   // The final answer is the text of the last response (earlier turns may hold partial narration).
   const finalText = (last?.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
-  return { text: finalText || texts.join("\n"), toolCalls, sources, usage: last?.usage, stop: last?.stop_reason };
+  return { text: finalText || texts.join("\n"), toolCalls, sources, usage: last?.usage, stop: last?.stop_reason, seen: [...seen] };
 }
 
 // ---------------- OpenRouter ----------------

@@ -10,8 +10,12 @@ let webUsed = 0;
 const reply = (obj: any, web = false) => ({ ok: true, json: async () => ({ stop_reason: "end_turn", content: [
   ...(web ? [{ type: "server_tool_use", name: "web_search", input: { query: "q" } }, { type: "web_search_tool_result", content: [{ type: "web_search_result", url: "https://example.com/news", title: "News" }] }] : []),
   { type: "text", text: "<json>" + JSON.stringify(obj) + "</json>" }] }) });
+let failDeckMou = false;
 (globalThis as any).fetch = async (_url: string, init: any) => {
+  if (!init?.body) return { ok: false, status: 0 }; // source checks: no network in tests
   const b = JSON.parse(init.body); const sys = b.system as string;
+  if (sys.includes("SponsorDesk A0") && String(b.messages?.[0]?.content).includes("Mystery Fest")) return reply({ status: "clarify", questions: ["Which institute runs Mystery Fest?"], found: "Two fests share this name." }, true);
+  if (failDeckMou && (sys.includes("SponsorDesk A4") || sys.includes("SponsorDesk A6"))) return { ok: false, status: 402, text: async () => "credit" };
   const web = (b.tools || []).some((t: any) => t.type?.startsWith("web_search"));
   if (web) webUsed++;
   if (sys.includes("SponsorDesk A0")) return reply({ name: "E-Summit 2027", organizer: "E-Cell, IIT Bombay", dates: "Jan 2027", city: "Mumbai", audience: "20,000 footfall (ecell.in)", tiers: [{ name: "Title", price_inr: 1500000, deliverables: "naming" }, { name: "Gold", price_inr: 400000, deliverables: "booth" }], floor_inr: 200000, postal_address: "IIT Bombay, Powai, Mumbai 400076" }, true);
@@ -34,8 +38,11 @@ const reply = (obj: any, web = false) => ({ ok: true, json: async () => ({ stop_
 let fails = 0; const eq = (n: string, g: any, w: any) => { const ok = JSON.stringify(g) === JSON.stringify(w); if (!ok) fails++; console.log(`${ok ? "PASS" : "FAIL"} ${n}${ok ? "" : ` got=${JSON.stringify(g)} want=${JSON.stringify(w)}`}`); };
 (async () => {
   const d = await db();
-  // A0
-  const b = await F.runBrief("E-Summit 2027 IIT Bombay", { name: "Rishiraaj" });
+  // A0: an unclear event asks the manager and saves nothing
+  const cl: any = await F.runBrief("Mystery Fest", { name: "Rishiraaj" });
+  eq("A0 asks when the event is unclear", [!!cl.clarify, cl.clarify?.questions?.length, (await d.q(`SELECT COUNT(*) AS n FROM events`))[0].n], [true, 1, 0]);
+  const b: any = await F.runBrief("E-Summit 2027 IIT Bombay", { name: "Rishiraaj" });
+  eq("A0 never writes unknown", [/unknown/i.test(b.profile.audience), /unknown/i.test(b.profile.past_sponsors), /unknown/i.test(b.profile.proof)], [false, false, false]);
   eq("A0 brief researched with sources", [b.profile.name, (b.profile.sources || []).length > 0], ["E-Summit 2027", true]);
   eq("A0 approver defaults to sender", (await d.q(`SELECT v FROM settings WHERE k='approvers'`))[0].v, "Rishiraaj");
   let blocked = ""; try { await F.runDiscover(5); } catch (e: any) { blocked = e.message; }
@@ -78,6 +85,16 @@ let fails = 0; const eq = (n: string, g: any, w: any) => { const ok = JSON.strin
   eq("A6 MOU email drafted", (await F.sendMou("acme-in", "https://x.app")).ok, true);
   await L.setStage("acme-in", "MOU_SIGNED", "signed", "manager");
   // A7
+  // A4/A6 fall back to the organiser's PDFs when the agent cannot produce them
+  failDeckMou = true;
+  const dk2 = await F.buildDeck("acme-in");
+  const dj = JSON.parse((await d.q(`SELECT json FROM decks WHERE id=$1`, [dk2.id]))[0].json);
+  eq("A4 falls back to the standard deck PDF", dj.fallback_pdf, "/fallback/sponsorship-deck.pdf");
+  const mu2 = await F.makeMou("acme-in", { tier: "Gold", cash_inr: 400000, deliverables: "booth" });
+  eq("A6 falls back to the standard MOU PDF", [(await d.q(`SELECT mou_pdf FROM deals WHERE company_id='acme-in'`))[0].mou_pdf, !!mu2.share], ["/fallback/mou.pdf", true]);
+  eq("fallbacks raise no exception", (await d.q(`SELECT COUNT(*) AS n FROM exceptions WHERE kind LIKE '%deck%' OR kind LIKE '%mou%'`))[0].n, 0);
+  failDeckMou = false;
+  await L.setStage("acme-in", "MOU_SIGNED", "signed", "manager");
   eq("A7 update drafted for signed sponsor", (await F.nurture("Registrations crossed 12,400")).drafted, 1);
   eq("web search used for research agents", webUsed >= 3, true);
   console.log(fails ? `${fails} FAILED` : "ALL PASS"); process.exit(fails ? 1 : 0);

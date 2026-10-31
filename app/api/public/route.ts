@@ -17,8 +17,8 @@ export async function GET(req: Request) {
     return Response.json(deck);
   }
   if (kind === "mou") {
-    const r = (await d.q(`SELECT d.mou, d.tier, c.name FROM deals d JOIN companies c ON c.id=d.company_id WHERE d.share_id=$1`, [id]))[0];
-    return r ? Response.json({ mou: r.mou, tier: r.tier, company: r.name }) : Response.json({ error: "not found" }, { status: 404 });
+    const r = (await d.q(`SELECT d.mou, d.mou_pdf, d.tier, c.name FROM deals d JOIN companies c ON c.id=d.company_id WHERE d.share_id=$1`, [id]))[0];
+    return r ? Response.json({ mou: r.mou, mou_pdf: r.mou_pdf || null, tier: r.tier, company: r.name }) : Response.json({ error: "not found" }, { status: 404 });
   }
   return Response.json({ error: "not found" }, { status: 404 });
 }

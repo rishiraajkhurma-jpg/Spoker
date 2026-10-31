@@ -5,6 +5,9 @@ import * as A from "./agents";
 import * as G from "./gmail";
 import { dataSource } from "./claude";
 
+export const FALLBACK_DECK = "/fallback/sponsorship-deck.pdf";
+export const FALLBACK_MOU = "/fallback/mou.pdf";
+
 export async function getEvent(): Promise<A.EventProfile | null> {
   const d = await db();
   const r = await d.q(`SELECT profile FROM events WHERE id='current'`);
@@ -351,11 +354,14 @@ export async function buildDeck(companyId: string) {
   const co = await company(companyId);
   const ct = await primaryContact(companyId);
   const notes = (await d.q(`SELECT digest FROM meetings WHERE company_id=$1 AND digest IS NOT NULL ORDER BY n`, [companyId])).map((m) => json<any>(m.digest, {}).summary).filter(Boolean).join(" | ");
-  const deck = await A.makeDeck(e, co, ct, notes);
+  // If the agent cannot build a deck, the organiser's standard deck PDF is used instead.
+  let deck: any;
+  try { deck = await A.makeDeck(e, co, ct, notes); if (!deck?.slides?.length) throw new Error("empty deck"); }
+  catch { deck = { title: `${co.name} x ${e.name}`, fallback_pdf: FALLBACK_DECK }; }
   const id = uid().replace(/-/g, "").slice(0, 20);
   await d.q(`INSERT INTO decks (id, company_id, json, created_at) VALUES ($1,$2,$3,$4)`, [id, companyId, JSON.stringify({ ...deck, event: { name: e.name, organizer: e.organizer, dates: e.dates, city: e.city }, company: co.name, contacts: e.sender }), nowIso()]);
   await d.q(`UPDATE companies SET deck_id=$1 WHERE id=$2`, [id, companyId]);
-  await L.log("A4", companyId, "deck_built", `${deck.slides?.length || 0} slides + talk track`);
+  await L.log("A4", companyId, "deck_built", deck.fallback_pdf ? "Sponsorship deck ready" : `${deck.slides?.length || 0} slides + talk track`);
   return { id };
 }
 
@@ -399,11 +405,14 @@ export async function makeMou(companyId: string, deal: any) {
   const e = await needEvent();
   const d = await db();
   const co = await company(companyId);
-  const md = await A.mou(e, co, deal);
+  // If the agent cannot draft the MOU, the organiser's standard MOU PDF is used instead.
+  let md = "", pdf: string | null = null;
+  try { md = await A.mou(e, co, deal); if (!md.trim()) throw new Error("empty MOU"); }
+  catch { md = ""; pdf = FALLBACK_MOU; }
   const share = uid().replace(/-/g, "").slice(0, 20);
-  await d.q(`INSERT INTO deals (company_id, tier, cash_inr, in_kind, deliverables, mou, status, share_id, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,$8)
-     ON CONFLICT (company_id) DO UPDATE SET tier=excluded.tier, cash_inr=excluded.cash_inr, in_kind=excluded.in_kind, deliverables=excluded.deliverables, mou=excluded.mou, status='draft', share_id=excluded.share_id, updated_at=excluded.updated_at`,
-    [companyId, deal.tier, num(deal.cash_inr), deal.in_kind || "", deal.deliverables || "", md, share, nowIso()]);
+  await d.q(`INSERT INTO deals (company_id, tier, cash_inr, in_kind, deliverables, mou, mou_pdf, status, share_id, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,'draft',$8,$9)
+     ON CONFLICT (company_id) DO UPDATE SET tier=excluded.tier, cash_inr=excluded.cash_inr, in_kind=excluded.in_kind, deliverables=excluded.deliverables, mou=excluded.mou, mou_pdf=excluded.mou_pdf, status='draft', share_id=excluded.share_id, updated_at=excluded.updated_at`,
+    [companyId, deal.tier, num(deal.cash_inr), deal.in_kind || "", deal.deliverables || "", md, pdf, share, nowIso()]);
   if (num(deal.cash_inr) && num(deal.cash_inr) < e.floor_inr)
     await L.addException(companyId, "below_floor_mou", `MOU cash INR ${deal.cash_inr} is below the floor INR ${e.floor_inr}.`, "Approve only if the trade is worth it.");
   await L.setStage(companyId, "MOU_DRAFTED", `MOU for ${deal.tier}`, "A6");
@@ -418,7 +427,9 @@ export async function sendMou(companyId: string, origin: string) {
   const ct = await primaryContact(companyId);
   const deal = (await d.q(`SELECT * FROM deals WHERE company_id=$1`, [companyId]))[0];
   if (!deal || !ct?.email) throw new Error("Draft the MOU and make sure the contact has an email.");
-  const body = `Hi ${firstName(ct.full_name)},\n\nAs discussed, here is the MOU for ${co.name}'s ${deal.tier} partnership with ${e.name}: ${origin}/m/${deal.share_id}\n\nPage 1 lists exactly what ${co.name} receives; the next part covers payment and brand approvals. If your legal team wants to adjust anything, mark it up and I will take it to our side.`;
+  const body = deal.mou_pdf
+    ? `Hi ${firstName(ct.full_name)},\n\nAs discussed, here is the MOU for ${co.name}'s ${deal.tier} partnership with ${e.name}: ${origin}/m/${deal.share_id}\n\nIf your legal team wants to adjust anything, mark it up and I will take it to our side.`
+    : `Hi ${firstName(ct.full_name)},\n\nAs discussed, here is the MOU for ${co.name}'s ${deal.tier} partnership with ${e.name}: ${origin}/m/${deal.share_id}\n\nPage 1 lists exactly what ${co.name} receives; the next part covers payment and brand approvals. If your legal team wants to adjust anything, mark it up and I will take it to our side.`;
   const q = await L.queue({ key: `${ct.id}:mou:${deal.share_id}`, contact_id: ct.id, company_id: companyId, sequence: "mou", step: 1, subject: `MOU: ${co.name} x ${e.name}`, body: A.withSignature(body, e) });
   if (q.ok) await L.log("A6", companyId, "mou_email_drafted", "MOU email waiting for your approval");
   return q;

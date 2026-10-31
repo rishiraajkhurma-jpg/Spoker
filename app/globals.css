@@ -286,3 +286,4 @@ details > summary { cursor: pointer; color: var(--indigo); font-weight: 600; fon
 .clarify { border-left: 4px solid var(--warn, #c98a12); margin: 16px 0; }
 .clarify ol { margin: 10px 0 12px 20px; padding: 0; line-height: 1.6; }
 .clarify textarea { width: 100%; min-height: 84px; }
+.pdf-view { display: block; width: min(1120px, 100%); height: calc(100vh - 110px); min-height: 520px; margin: 0 auto; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
