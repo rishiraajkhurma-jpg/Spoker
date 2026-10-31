@@ -26,10 +26,13 @@ export function dataSource() { return hasCrustdata() ? "crustdata" : "web"; }
 // Billing, quota or auth failures on one provider fall back to the other if its key exists.
 const SWITCHABLE = /credit balance|billing|quota|RESOURCE_EXHAUSTED|rate.?limit|overloaded|API (401|403|429|529)|invalid x-api-key|authentication|PERMISSION_DENIED|UNAUTHENTICATED/i;
 function friendly(msg: string, who: string) {
-  if (/credit balance|billing/i.test(msg)) return `${who}: the account has no credit. Add credit (console.anthropic.com > Plans & Billing) or add a working GEMINI_API_KEY in Vercel.`;
+  return friendlyCore(msg, who) + ` [${msg.replace(/\s+/g, " ").slice(0, 220)}]`;
+}
+function friendlyCore(msg: string, who: string) {
+  if (who === "Claude" && /credit balance|billing/i.test(msg)) return `${who}: the account has no credit. Add credit (console.anthropic.com > Plans & Billing) or add a working GEMINI_API_KEY in Vercel.`;
   if (/401|403|invalid x-api-key|authentication|UNAUTHENTICATED|PERMISSION_DENIED/i.test(msg)) return `${who}: the API key was rejected. Check it in Vercel > Settings > Environment Variables.`;
   if (/quota|RESOURCE_EXHAUSTED|429|rate.?limit/i.test(msg)) return `${who}: quota or rate limit reached. Wait a minute or raise the limit.`;
-  return `${who}: ${msg.slice(0, 300)}`;
+  return `${who} failed.`;
 }
 export async function claude(opts: Opts): Promise<ClaudeResult> {
   const first = provider();
