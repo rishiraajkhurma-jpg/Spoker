@@ -30,6 +30,22 @@ const SCHEMA = [
     in_kind TEXT, deliverables TEXT, mou TEXT, status TEXT, updated_at TEXT)`,
   `CREATE TABLE IF NOT EXISTS log (id TEXT PRIMARY KEY, ts TEXT, actor TEXT, company_id TEXT, action TEXT,
     from_stage TEXT, to_stage TEXT, detail TEXT)`,
+  `CREATE TABLE IF NOT EXISTS decks (id TEXT PRIMARY KEY, company_id TEXT, json TEXT, created_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS meetings (id TEXT PRIMARY KEY, company_id TEXT, n INTEGER, start_at TEXT, minutes INTEGER,
+    meet_link TEXT, event_id TEXT, status TEXT, notes TEXT, digest TEXT, created_at TEXT)`,
+];
+// Columns added after v1; each runs once and errors (already exists) are ignored.
+const MIGRATIONS = [
+  `ALTER TABLE companies ADD COLUMN sources TEXT`,
+  `ALTER TABLE companies ADD COLUMN meeting_count INTEGER DEFAULT 0`,
+  `ALTER TABLE companies ADD COLUMN draft_subject TEXT`,
+  `ALTER TABLE companies ADD COLUMN draft_body TEXT`,
+  `ALTER TABLE companies ADD COLUMN deck_id TEXT`,
+  `ALTER TABLE contacts ADD COLUMN email_source TEXT`,
+  `ALTER TABLE contacts ADD COLUMN linkedin_note TEXT`,
+  `ALTER TABLE contacts ADD COLUMN linkedin_dm TEXT`,
+  `ALTER TABLE contacts ADD COLUMN linkedin_status TEXT`,
+  `ALTER TABLE deals ADD COLUMN share_id TEXT`,
 ];
 
 let injected: DB | null = null;
@@ -51,7 +67,10 @@ async function makeNeon(): Promise<DB> {
 
 export async function db(): Promise<DB> {
   const d = injected || cached || (cached = await makeNeon());
-  if (!ready) ready = (async () => { for (const s of SCHEMA) await d.q(s); })();
+  if (!ready) ready = (async () => {
+    for (const s of SCHEMA) await d.q(s);
+    for (const m of MIGRATIONS) { try { await d.q(m); } catch { /* column exists */ } }
+  })();
   await ready;
   return d;
 }

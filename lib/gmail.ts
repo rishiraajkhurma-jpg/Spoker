@@ -1,7 +1,7 @@
 // Gmail via Google OAuth (web app flow) and the Gmail REST API. Single mailbox: the manager's.
 import { getSetting, setSetting } from "./db";
 
-const SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.readonly", "openid", "email"];
+const SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/calendar.events", "openid", "email"];
 const G = "https://gmail.googleapis.com/gmail/v1/users/me";
 let cache: { token: string; exp: number } | null = null;
 
@@ -116,4 +116,31 @@ export async function fromPerson(email: string, days = 30): Promise<GMsg[]> {
   const out: GMsg[] = [];
   for (const m of list.messages || []) out.push(toMsg(await api(`/messages/${m.id}?format=full`)));
   return out;
+}
+
+/** Search the mailbox (used to find Google Meet "Take notes with Gemini" emails). */
+export async function search(q: string, max = 5): Promise<GMsg[]> {
+  const list = await api(`/messages?q=${encodeURIComponent(q)}&maxResults=${max}`);
+  const out: GMsg[] = [];
+  for (const m of list.messages || []) out.push(toMsg(await api(`/messages/${m.id}?format=full`)));
+  return out;
+}
+
+/** Create a Google Calendar event with a Meet link and email the invite to attendees. */
+export async function createMeet(o: { summary: string; description: string; startIso: string; minutes: number; attendees: string[] }) {
+  const t = await accessToken();
+  const start = new Date(o.startIso);
+  const end = new Date(start.getTime() + o.minutes * 60000);
+  const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all", {
+    method: "POST", headers: { authorization: `Bearer ${t}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      summary: o.summary, description: o.description,
+      start: { dateTime: start.toISOString(), timeZone: "Asia/Kolkata" }, end: { dateTime: end.toISOString(), timeZone: "Asia/Kolkata" },
+      attendees: o.attendees.map((email) => ({ email })),
+      conferenceData: { createRequest: { requestId: "sd-" + Date.now(), conferenceSolutionKey: { type: "hangoutsMeet" } } },
+    }),
+  });
+  const j: any = await res.json();
+  if (!res.ok) throw new Error("Calendar: " + JSON.stringify(j).slice(0, 300) + " (reconnect Google in Settings to grant calendar access)");
+  return { id: j.id as string, link: (j.hangoutLink || j.htmlLink) as string };
 }

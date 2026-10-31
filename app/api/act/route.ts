@@ -8,8 +8,13 @@ export const dynamic = "force-dynamic";
 
 export const POST = wrap(async (req) => {
   const b = await req.json();
+  const origin = new URL(req.url).origin;
   switch (b.op) {
-    case "discover": return F.runDiscover(Number(b.count || 10));
+    // A0
+    case "brief": return F.runBrief(String(b.line || ""), b.sender || {});
+    case "lock_floor": return F.lockFloor(Number(b.floor), b.approver);
+    // A1 / A2
+    case "discover": return F.runDiscover(Number(b.count || 8));
     case "analyze": return F.runAnalyze(String(b.company_id));
     case "add_company": {
       const d = await db();
@@ -18,6 +23,14 @@ export const POST = wrap(async (req) => {
       await L.log("manager", id, "add_company", b.note || "");
       return { ok: true, id };
     }
+    case "set_email": return F.setContactEmail(String(b.contact_id), String(b.email || ""));
+    case "linkedin_status": {
+      const d = await db();
+      await d.q(`UPDATE contacts SET linkedin_status=$1 WHERE id=$2`, [b.status, b.contact_id]);
+      await L.log("manager", b.company_id || null, "linkedin", `${b.status}: ${b.contact_id}`);
+      return { ok: true };
+    }
+    // Email agent / approvals
     case "edit": return L.editDraft(b.key, b.subject, b.body);
     case "approve": return L.approve(b.key, b.approver);
     case "approve_many": {
@@ -27,11 +40,24 @@ export const POST = wrap(async (req) => {
     }
     case "reject": await L.reject(b.key, b.approver || "manager"); return { ok: true };
     case "send": return F.sendDue(200000);
-    case "replies": return F.checkReplies();
-    case "simulate": return { result: await F.simulateReply(b.company_id, String(b.text || "")) };
+    case "replies": return F.checkReplies(origin);
+    case "simulate": return { result: await F.simulateReply(b.company_id, String(b.text || ""), origin) };
     case "reconcile": return F.reconcile();
     case "resolve": return F.resolveException(b.id, b.action, b.approver, b.note || "", b.subject, b.body);
-    case "mou": return { mou: await F.makeMou(b.company_id, b.deal || {}) };
+    // A3
+    case "schedule": return F.scheduleMeeting(String(b.company_id), String(b.template || "first_call"), (b.slots || []).filter(Boolean));
+    case "confirm_meeting": return F.confirmMeeting(String(b.company_id), String(b.start), Number(b.minutes || 30), b.approver, origin);
+    // A4
+    case "deck": return F.buildDeck(String(b.company_id));
+    // A5
+    case "gemini_notes": return F.findGeminiNotes(String(b.company_id));
+    case "notes": return F.ingestNotes(String(b.company_id), String(b.notes || ""));
+    // A6
+    case "mou": return F.makeMou(b.company_id, b.deal || {});
+    case "send_mou": return F.sendMou(b.company_id, origin);
+    // A7
+    case "nurture": return F.nurture(String(b.news || ""));
+    // misc
     case "stage": await L.setStage(b.company_id, b.stage, b.reason || "manual", "manager"); return { ok: true };
     case "settings": {
       for (const k of ["approvers", "cap_new_per_day", "cap_total_per_day", "spacing_sec", "organiser_permission"]) if (b[k] !== undefined) await setSetting(k, String(b[k]));
