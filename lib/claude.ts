@@ -7,7 +7,7 @@ import { McpClient } from "./mcp";
 const CRUSTDATA_MCP = "https://install.crustdata.com/mcp";
 export type Source = { url: string; title?: string };
 export type ClaudeResult = { text: string; toolCalls: { name: string; input: any }[]; sources: Source[]; usage: any; stop: string };
-export type Opts = { system: string; prompt: string; crustdata?: boolean; web?: number; maxTokens?: number };
+export type Opts = { system: string; prompt: string; crustdata?: boolean; web?: number; maxTokens?: number; budgetMs?: number };
 
 export function provider(): "gemini" | "anthropic" {
   const p = (process.env.LLM_PROVIDER || "").toLowerCase();
@@ -75,6 +75,7 @@ async function anthropic(opts: Opts): Promise<ClaudeResult> {
   const sources: Source[] = [];
   let last: any = null;
   const texts: string[] = [];
+  const started = Date.now();
   for (let turn = 0; turn < 8; turn++) {
     const body: any = { ...body0, model: model("anthropic"), max_tokens: opts.maxTokens || 8000, system: opts.system, messages };
     if (tools.length) body.tools = tools;
@@ -89,7 +90,15 @@ async function anthropic(opts: Opts): Promise<ClaudeResult> {
         for (const c of b.citations || []) addSource(sources, c.url, c.title);
       }
     }
-    if (last.stop_reason === "pause_turn") { messages.push({ role: "assistant", content: last.content }); continue; }
+    if (last.stop_reason === "pause_turn") {
+      messages.push({ role: "assistant", content: last.content });
+      if (Date.now() - started > (opts.budgetMs || 200000)) {
+        messages.push({ role: "user", content: "Time is up. Do not use any more tools. Give your final answer now in the requested format, marking anything missing as unknown." });
+        delete body0.mcp_servers; tools.length = 0;
+        delete headers["anthropic-beta"];
+      }
+      continue;
+    }
     break;
   }
   // The final answer is the text of the last response (earlier turns may hold partial narration).
@@ -133,7 +142,15 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
   let text = "";
   const gModels = [...new Set([model("gemini"), "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"])];
   let gm = 0;
-  for (let turn = 0; turn < 16; turn++) {
+  const started = Date.now();
+  const budget = opts.budgetMs || 200000; // Vercel functions stop at 300 s
+  let wrapped = false;
+  for (let turn = 0; turn < 14; turn++) {
+    if (!wrapped && tools && Date.now() - started > budget) {
+      wrapped = true;
+      tools = undefined;
+      contents.push({ role: "user", parts: [{ text: "Time is up. Do not call any more tools. Give your final answer now in the requested format, using what you have found; mark anything missing as unknown." }] });
+    }
     const body: any = { systemInstruction: { parts: [{ text: opts.system }] }, contents, generationConfig: { maxOutputTokens: Math.max(opts.maxTokens || 8000, 2048) } };
     if (tools) body.tools = tools;
     let res: Response | null = null;
@@ -162,7 +179,7 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
     const parts: any[] = cand?.content?.parts || [];
     const calls = parts.filter((p) => p.functionCall);
     text = parts.filter((p) => typeof p.text === "string" && !p.thought).map((p) => p.text).join("\n");
-    if (!calls.length || !mcp) break;
+    if (!calls.length || !mcp || wrapped && !tools) break;
     contents.push(cand.content);
     const responses: any[] = [];
     for (const p of calls) {
@@ -173,7 +190,7 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
       responses.push({ functionResponse: { name: p.functionCall.name, response: { result: result.slice(0, 24000) } } });
     }
     contents.push({ role: "user", parts: responses });
-    if (turn === 14) contents.push({ role: "user", parts: [{ text: "Stop calling tools now and give your final answer in the requested format." }] });
+    if (turn === 11 && !wrapped) { wrapped = true; contents.push({ role: "user", parts: [{ text: "Stop calling tools now and give your final answer in the requested format." }] }); }
   }
   return { text, toolCalls, sources, usage: last?.usageMetadata, stop: last?.candidates?.[0]?.finishReason || "" };
 }
