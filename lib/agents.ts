@@ -21,7 +21,7 @@ const RULES = `House rules (non-negotiable):
 - Indian business English, direct and polite. Amounts as INR with Indian grouping (e.g. INR 3,00,000 or 3 lakh).`;
 
 const research = () => (hasCrustdata()
-  ? "Use the Crustdata tools for company and people data. Crustdata runs in code mode: first call get_schema (or list_tools) to see the available data tools and their parameters, then call execute with a short plain JavaScript script (no type annotations) that uses `await callTool(name, params)` and returns only the fields you need. Crustdata also offers live web search and page fetch: use them for news, event pages and company sites, and cite the URLs. Be frugal with credits: search first, enrich only the one chosen person for a business email."
+  ? "Use the Crustdata tools for company and people data. Crustdata runs in code mode: first call get_schema (or list_tools) to see the available data tools and their parameters, then call execute with a short plain JavaScript script (no type annotations) that uses `await callTool(name, params)` and returns only the fields you need. Crustdata also offers live web search and page fetch: use them for news, event pages and company sites, and cite the URLs. Be frugal with credits and time: you have about 2 minutes and at most 5 tool calls, so batch several lookups inside one execute script (use parallelMap) instead of many small calls. Search first, enrich only the one chosen person for a business email. Do not paste raw tool output back; keep only what you need."
   : "Use web search. Read real pages (company site, press, news, team pages, LinkedIn public results). Cite the exact URL for each fact.");
 
 export function profileText(e: EventProfile) {

@@ -10,9 +10,9 @@ export type ClaudeResult = { text: string; toolCalls: { name: string; input: any
 export type Opts = { system: string; prompt: string; crustdata?: boolean; web?: number; maxTokens?: number; budgetMs?: number; deadline?: number };
 
 // Vercel stops a function at 300 s. Every call gets a hard deadline; tools stop early enough to leave time for the answer.
-const HARD_MS = 235000, ANSWER_MS = 75000, TOOL_CALL_MS = 60000;
+const HARD_MS = 240000, ANSWER_MS = 95000, TOOL_CALL_MS = 50000;
 const left = (o: Opts) => (o.deadline as number) - Date.now();
-const toolTimeUp = (o: Opts, started: number) => Date.now() - started > (o.budgetMs || 170000) || left(o) < ANSWER_MS;
+const toolTimeUp = (o: Opts, started: number) => Date.now() - started > (o.budgetMs || 140000) || left(o) < ANSWER_MS;
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   return Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error(what + " timed out")), Math.max(1000, ms)))]);
 }
@@ -156,6 +156,7 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
   let gm = 0;
   const started = Date.now();
   let wrapped = false;
+  let lowThink = true;
   for (let turn = 0; turn < 14; turn++) {
     if (left(opts) < 8000) throw new Error("The research took too long and was stopped before Vercel's 300 s limit. Try again, or ask for fewer companies.");
     if (!wrapped && tools && toolTimeUp(opts, started)) {
@@ -165,6 +166,7 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
     }
     const body: any = { systemInstruction: { parts: [{ text: opts.system }] }, contents, generationConfig: { maxOutputTokens: Math.max(opts.maxTokens || 8000, 2048) } };
     if (tools) body.tools = tools;
+    if (wrapped && !tools && lowThink) body.generationConfig.thinkingConfig = { thinkingLevel: "low" }; // answer fast once research is over
     let res: Response | null = null;
     let errText = "";
     outer: for (let mi = gm; mi < gModels.length; mi++) {
@@ -173,6 +175,7 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
         catch (e: any) { throw new Error(/abort|timeout/i.test(String(e?.name) + e?.message) ? "The research took too long and was stopped before Vercel's 300 s limit. Try again, or ask for fewer companies." : String(e?.message || e)); }
         if (res.ok) { gm = mi; break outer; }
         errText = (await res.text()).slice(0, 500);
+        if (res.status === 400 && /thinking/i.test(errText) && body.generationConfig.thinkingConfig) { lowThink = false; delete body.generationConfig.thinkingConfig; attempt--; continue; }
         if ([500, 503].includes(res.status) && attempt === 0 && left(opts) > ANSWER_MS) { await new Promise((r) => setTimeout(r, 2500)); continue; } // busy: retry once
         break;
       }
@@ -201,10 +204,10 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
       let result: string;
       try { result = await withTimeout(mcp.call(real, p.functionCall.args || {}), Math.min(TOOL_CALL_MS, left(opts) - ANSWER_MS + 20000), "Crustdata call"); } catch (e: any) { result = "ERROR: " + e.message; }
       harvestUrls(sources, result, 6);
-      responses.push({ functionResponse: { name: p.functionCall.name, response: { result: result.slice(0, 24000) } } });
+      responses.push({ functionResponse: { name: p.functionCall.name, response: { result: result.slice(0, 9000) } } });
     }
     contents.push({ role: "user", parts: responses });
-    if (turn === 11 && !wrapped) { wrapped = true; contents.push({ role: "user", parts: [{ text: "Stop calling tools now and give your final answer in the requested format." }] }); }
+    if (turn === 7 && !wrapped) { wrapped = true; contents.push({ role: "user", parts: [{ text: "Stop calling tools now and give your final answer in the requested format." }] }); }
   }
   harvestUrls(sources, text, 12);
   return { text, toolCalls, sources, usage: last?.usageMetadata, stop: last?.candidates?.[0]?.finishReason || "" };
