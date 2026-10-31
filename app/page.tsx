@@ -102,7 +102,7 @@ function Overview({ data, go }: Any) {
   for (const c of data.companies) byStage[c.stage] = (byStage[c.stage] || 0) + 1;
   const sentToday = data.messages.filter((m: Any) => m.sent_at && new Date(m.sent_at).toDateString() === new Date().toDateString()).length;
   const checks = [
-    [s.claude, "Anthropic API key", "ANTHROPIC_API_KEY in Vercel"],
+    [s.claude, s.provider === "gemini" ? "Gemini API key" : "Anthropic API key", s.provider === "gemini" ? "GEMINI_API_KEY in Vercel" : "ANTHROPIC_API_KEY in Vercel"],
     [s.crustdata, "Crustdata API key", "CRUSTDATA_API_KEY in Vercel (without it, no contacts are found)"],
     [!!data.event, "Event brief saved", "Brief tab"],
     [!!s.approvers, "Approvers set", "Settings tab"],
@@ -126,7 +126,7 @@ function Overview({ data, go }: Any) {
               <span>{ok ? <span className="good">ready</span> : <span className="warn">todo</span>} {name}</span>{!ok && <span className="muted">{how}</span>}
             </div>
           ))}
-          <p className="small muted">Model: {s.model}</p>
+          <p className="small muted">Model: {s.model} ({s.provider})</p>
         </div>
         <div className="panel">
           <h2>Pipeline</h2>

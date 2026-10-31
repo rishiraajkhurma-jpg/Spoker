@@ -1,7 +1,7 @@
 import { wrap } from "@/lib/http";
 import { db, getSetting, json } from "@/lib/db";
 import { getEvent } from "@/lib/flows";
-import { hasClaude, hasCrustdata, model } from "@/lib/claude";
+import { hasClaude, hasCrustdata, model, provider } from "@/lib/claude";
 import { hasGoogleApp, connectedEmail } from "@/lib/gmail";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export const GET = wrap(async () => {
     settings: {
       approvers: await getSetting("approvers", ""), postal: await getSetting("postal", ""),
       cap_new_per_day: await getSetting("cap_new_per_day", "30"), cap_total_per_day: await getSetting("cap_total_per_day", "60"), spacing_sec: await getSetting("spacing_sec", "60"),
-      gmail: await connectedEmail(), googleApp: hasGoogleApp(), claude: hasClaude(), crustdata: hasCrustdata(), model: model(), permission: await getSetting("organiser_permission", ""),
+      gmail: await connectedEmail(), googleApp: hasGoogleApp(), claude: hasClaude(), provider: provider(), crustdata: hasCrustdata(), model: model(), permission: await getSetting("organiser_permission", ""),
     },
   };
 });
