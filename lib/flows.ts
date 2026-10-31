@@ -39,6 +39,13 @@ export function appUrl(req?: Request) {
   return process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "";
 }
 
+function mergeSources(signals: any[] = [], found: A.Source[] = []) {
+  const out: A.Source[] = [];
+  for (const g of signals || []) if (/^https?:\/\//.test(g?.source || "") && !out.some((x) => x.url === g.source)) out.push({ url: g.source, title: g.claim });
+  for (const s of found || []) if (!out.some((x) => x.url === s.url)) out.push(s);
+  return out.slice(0, 15);
+}
+
 // ---------- A0 ----------
 export async function runBrief(oneLine: string, sender: { name: string; title?: string; phone?: string; email?: string }) {
   if (!oneLine.trim()) throw new Error("Describe the event in one line.");
@@ -94,7 +101,7 @@ export async function runAnalyze(companyId: string) {
      audience_benefit=$9, reasons=$10, role_map=$11, decision=$12, sources=$13, draft_subject=$14, draft_body=$15, updated_at=$16 WHERE id=$17`,
     [our, their, inter, priority, a.model || "", a.tier || "", a.price_range || "", a.angle || "", a.audience_benefit || "",
       JSON.stringify(reasons), JSON.stringify(a.role_map || {}), keep ? "keep" : `drop: ${a.drop_reason || "intersection " + inter}`,
-      JSON.stringify(raw.sources.slice(0, 15)), a.email?.subject || "", a.email?.body || "", nowIso(), companyId]);
+      JSON.stringify(mergeSources(a.signals, raw.sources)), a.email?.subject || "", A.tidyBody(a.email?.body || "", firstName(a.contact?.full_name)), nowIso(), companyId]);
   await L.log("A1", companyId, "decision", keep ? `${priority}: ours ${our}, theirs ${their}. ${a.angle}` : `Dropped: ${a.drop_reason || "intersection " + inter + " below 35"}`);
   if (!keep) { await L.setStage(companyId, "DISQUALIFIED", a.drop_reason || `intersection ${inter}`, "A1"); return { priority, dropped: true }; }
   await L.setStage(companyId, "QUALIFIED", `${priority}, intersection ${inter}`, "A1");

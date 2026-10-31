@@ -42,6 +42,29 @@ export function signature(e: EventProfile) {
   const s = e.sender || ({} as any);
   return ["Best regards,", s.name, s.title, s.org, [s.phone, s.email].filter(Boolean).join(" | "), e.website, e.postal_address].filter(Boolean).join("\n");
 }
+/** Guarantee a greeting and paragraph breaks, whatever the model returned. */
+export function tidyBody(body: string, firstName = "") {
+  let b = (body || "").replace(/\r/g, "").trim();
+  if (!b) return b;
+  if (!/^(hi|hello|dear)\b/i.test(b)) {
+    const name = firstName || "";
+    if (name && b.toLowerCase().startsWith(name.toLowerCase() + ",")) b = b.slice(name.length + 1).trim();
+    b = `Hi ${name || "there"},\n\n` + b;
+  }
+  if (!/\n\s*\n[\s\S]*\n\s*\n/.test(b)) {
+    const m = b.match(/^(.*?,)\s*\n*\s*([\s\S]*)$/);
+    const greet = m ? m[1] : "", rest = m ? m[2] : b;
+    const closer = rest.match(/If this is not relevant[\s\S]*$/i)?.[0] || "";
+    const main = closer ? rest.slice(0, rest.length - closer.length).trim() : rest;
+    const sents = main.split(/(?<=[.!?])\s+(?=[A-Z"'])/);
+    const cta = sents.length > 2 && /reply/i.test(sents[sents.length - 1]) ? sents.pop() : "";
+    const half = Math.ceil(sents.length / 2);
+    const paras = sents.length > 3 ? [sents.slice(0, half).join(" "), sents.slice(half).join(" ")] : [sents.join(" ")];
+    b = [greet, ...paras, cta, closer].filter(Boolean).join("\n\n");
+  }
+  return b;
+}
+
 export function withSignature(body: string, e: EventProfile) {
   return fixDashes(body.trim()) + "\n\n" + signature(e);
 }
@@ -102,14 +125,14 @@ export type Analysis = {
 export async function analyze(e: EventProfile, company: { name: string; domain?: string; why_now?: string }) {
   const system = `You are SponsorDesk A1+A2: you score one company as a sponsor, find the right person, and prepare the first touch. ${RULES}
 ${research()}
-Find the budget owner or day-to-day owner for the segment: brand/marketing head, campus hiring or employer branding lead, startup/ecosystem partnerships, developer relations, or CSR head. At startups under 200 people, the founder or marketing head. Also one backup person. Prefer an IIT Bombay alum when two candidates are equal. Get their public LinkedIn URL from search results. Email: only if it is published on a public page you cite (or Crustdata verified); otherwise leave email empty and set email_status "not_found". Re-check negative signals: hiring freeze, layoffs, headcount drop, the person leaving.
+Find the budget owner or day-to-day owner for the segment: brand/marketing head, campus hiring or employer branding lead, startup/ecosystem partnerships, developer relations, or CSR head. At startups under 200 people, the founder or marketing head. At companies over 200 people NEVER pick the CEO, founder or MD as the primary contact: they do not own fest budgets and the email will be ignored; pick the brand, marketing, campus or partnerships owner and use the founder only as the warm_path. Also one backup person. Prefer an IIT Bombay alum only between two candidates with the same fit. Get their public LinkedIn URL from search results. Email: only if it is published on a public page you cite (or Crustdata verified); otherwise leave email empty and set email_status "not_found". Re-check negative signals: hiring freeze, layoffs, headcount drop, the person leaving.
 
 Scoring (0-100 each, show factor points):
 OUR POV: ability to pay 25, brand fit and prestige 20, likelihood to close (warm path, alumni, past fest sponsorship) 20, deal size vs our tiers 15, value beyond cash 10, effort (procurement load) 10.
 THEIR POV (their marketing team): audience match 30, live objective right now 25, channel habit (already spends on campus/events) 15, measurable ROI available 15, budget timing (Indian FY Apr-Mar) 10, competitive pressure 5.
 Hard drop: brand-safety category, company in distress, institute rules forbid it. No cash budget is NOT a drop: pick a non-cash model (product_inkind, services_credits, opportunity).
 
-First email = a priced OFFER, not a meeting request: an activation named for them (chosen because of the signal), a price range from our tiers or the in-kind ask, the metric it is measured on with their own tracking, one sourced proof point from the event profile if available, CTA "Reply 'send' for the one-page plan." End with exactly: "If this is not relevant, reply 'no' and I will not follow up." Under 100 words. No links. No signature. Subject 3 to 7 words.
+First email = a priced OFFER, not a meeting request: an activation named for them (chosen because of the signal), a price range from our tiers or the in-kind ask, the metric it is measured on with their own tracking, one sourced proof point from the event profile if available, CTA "Reply 'send' for the one-page plan." End with exactly: "If this is not relevant, reply 'no' and I will not follow up." Under 100 words. Format the body as "Hi <first name>," then a blank line, then 2 or 3 short paragraphs separated by blank lines (\n\n). No links. No signature. Subject 3 to 7 words.
 LinkedIn note: under 200 characters, no pitch, a genuine reason to connect. LinkedIn DM (after they accept): under 60 words, the same offer in short.`;
   const prompt = `${profileText(e)}
 

@@ -203,7 +203,6 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
       toolCalls.push({ name: real, input: p.functionCall.args });
       let result: string;
       try { result = await withTimeout(mcp.call(real, p.functionCall.args || {}), Math.min(TOOL_CALL_MS, left(opts) - ANSWER_MS + 20000), "Crustdata call"); } catch (e: any) { result = "ERROR: " + e.message; }
-      harvestUrls(sources, result, 6);
       responses.push({ functionResponse: { name: p.functionCall.name, response: { result: result.slice(0, 9000) } } });
     }
     contents.push({ role: "user", parts: responses });
@@ -219,7 +218,7 @@ function harvestUrls(sources: Source[], text: string, max: number) {
   let n = 0;
   for (const raw of seen) {
     const u = raw.replace(/[.;:]+$/, "");
-    if (/crustdata\.com|googleapis|gstatic|linkedin\.com\/(in|company)\/?$/i.test(u)) continue;
+    if (/crustdata|googleapis|gstatic|amazonaws|cloudfront|hubspot|\.(png|jpe?g|gif|svg|webp)(\?|$)/i.test(u)) continue;
     if (sources.some((x) => x.url === u)) continue;
     addSource(sources, u, "");
     if (++n >= max || sources.length >= 20) break;
