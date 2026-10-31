@@ -1,0 +1,491 @@
+{
+  "skill_name": "event-sponsor-value-proposition",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I run Nordwind DevDays, a community-run CFP-driven conference in Hamburg. 320 attendees last edition, second edition is in May. Kestrel Cloud is our biggest prospect and their marketing director basically said they'd sign at the top tier if we hand over the attendee list and give their CTO a 30-minute keynote. I need to write up what sponsoring us is actually worth before I go back to her. Can you draft the value story?",
+      "expected_output": "A value-proposition draft for the brand buyer that opens with an explicit not-offered list (no attendee contact list, no purchasable speaking slot), deletes the pipeline category outright because the event is community-run, substitutes aggregate demographics for lead data, anchors on brand exposure, and carries the 320-attendee figure without inventing others.",
+      "files": [],
+      "expectations": [
+        "Classifies Nordwind DevDays at the community-run pole and states which pole the benefit claims assume",
+        "Refuses to include an attendee contact list or any attendee contact data as a sponsor benefit",
+        "Refuses the purchased keynote slot, stating that sponsorship buys placement and access but never a program slot",
+        "Deletes the pipeline value category outright rather than demoting it, parking it lower in the menu, or reserving it for later",
+        "Gives a reason for deleting rather than demoting: a demoted pipeline promise reappears later as scope in the prospectus",
+        "Substitutes aggregate attendee demographics for lead data",
+        "Writes the not-offered list before drafting any benefit claim",
+        "States the not-offered items to the sponsor up front, before describing what the sponsorship includes",
+        "Names brand exposure as the default anchor category for this event",
+        "Identifies the marketing director as a brand buyer segment rather than writing one statement for Kestrel Cloud as a company",
+        "Does not produce booth size, logo placement or ticket counts as the value proposition",
+        "Does not set, suggest or negotiate a price or tier fee",
+        "Carries the 320-attendee figure through rather than substituting a different audience number"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "We're putting together the sponsor story for Terrafold Summit, about 450 people, community-run, third edition. I want ONE tight value proposition we can use with everybody: recruiters, marketing folks, DevRel teams, whoever. I was going to lay it out as a value proposition canvas with the pains and gains on one side and our pain relievers on the other. Sound good?",
+      "expected_output": "A refusal of both the single blended statement and the canvas structure, replaced by the six-part per-segment template (Who / Why / What Before / How / What After / Alternatives) applied to one named segment at a time, starting by asking which segment to draft first.",
+      "files": [],
+      "expectations": [
+        "Refuses to produce a single blended statement covering all sponsor buyer types",
+        "Explains that a blended statement dilutes into generic exposure claims no budget holder can route internally",
+        "Declines the value-proposition-canvas structure as the drafting frame",
+        "Gives a reason the canvas is rejected: it starts from the offer side and maps several segments at once",
+        "Proposes the six-part template instead and names all six parts: Who, Why, What Before, How, What After, Alternatives",
+        "Keeps the six parts in that order",
+        "Defines Who as a named budget-holding role, not a company",
+        "Names distinct sponsor segments to draft separately, including at minimum product-feedback buyer, recruiting buyer and brand buyer",
+        "Asks which single segment to start with rather than drafting every segment at once",
+        "States that What Before captures the status quo the segment uses today without the event",
+        "States that Alternatives names the competing events, channels or sponsorship products fighting for the same budget line",
+        "Does not present booth, logo or ticket entitlements as the value proposition"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Brackenhall Build is our first hackathon, never run it before. We have a monthly meetup that pulls 140 people and 210 on the waitlist for the hackathon so far. A fintech called Ollavant asked what return they'd get. I want to tell them we draw 400 developers and that sponsors typically see a 4x return on a hackathon. Draft me something convincing.",
+      "expected_output": "A first-edition value proposition that refuses both the 400-attendee claim and the 4x return figure, uses the 140-person meetup and 210-deep waitlist as honest demand evidence flagged as first-edition evidence, offers a named post-event-report commitment as a substitute, and labels each claim evidenced or aspirational.",
+      "files": [],
+      "expectations": [
+        "Refuses to state that the event draws 400 developers, since no edition has happened",
+        "Refuses to quote a 4x return, or any other ROI multiple or conversion benchmark",
+        "States that this category has no published conversion benchmark to quote",
+        "Uses the 140-person meetup attendance and the 210-deep waitlist as honest demand evidence",
+        "Frames any attendance figure as an expectation derived from the meetup and waitlist, never as history",
+        "Flags the first-edition evidence as first-edition evidence inside the statement itself",
+        "Offers the organizers' own track record as a first-edition substitute",
+        "Offers a named commitment to deliver a post-event sponsor report as a checkable substitute for data that does not exist yet",
+        "Notes that no returning-sponsor rate, no prior post-event report and no prior attendee demographics exist for a first edition",
+        "Expresses confidence in the value without attaching a fabricated figure to it",
+        "Labels each claim in the draft as evidenced or aspirational",
+        "Does not invent a sponsor testimonial, customer count or past-edition statistic"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Helixon runs our own user conference: we own it, we fund it out of marketing, about 900 attendees, and we do opt-in badge scanning at booths so partners get scanned contacts back. A partner's developer-advocacy team wants to sponsor and their lead said what she really wants is to sit in on our roadmap planning and get her team's API in front of our users. What's the value proposition for her?",
+      "expected_output": "A product-feedback-buyer statement at the vendor-run pole: pipeline and consented lead retrieval stay on the table bounded by consent, roadmap influence is refused outright, product feedback is the co-lead category delivered through structured contact formats, and the compliance cost of the pipeline category is flagged.",
+      "files": [],
+      "expectations": [
+        "Classifies the Helixon conference at the vendor/foundation-run pole",
+        "Keeps pipeline as an available value category for this event rather than deleting it",
+        "Bounds any lead-retrieval or badge-scanning claim by attendee consent",
+        "Refuses roadmap influence as a sponsorship benefit",
+        "States that sponsorship money buys placement and access but never influence over the program or roadmap, at either pole",
+        "Identifies the buyer as a product-feedback buyer from the developer-advocacy title",
+        "Names product feedback as the co-lead category for this segment",
+        "Describes the feedback mechanism as structured contact with a technical audience, such as a workshop slot, a staffed table or office hours",
+        "Notes that this sponsor routes the feedback internally to product or engineering rather than to sales",
+        "Flags the compliance cost of the pipeline category: a consent flow, a data-protection review, and a contractual limit on the sponsor's reuse of the data",
+        "Notes that handing a sponsor attendee contact details is irreversible and cannot be recalled"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Second edition of Calderhaus Conf. I have maybe four hours of admin time before I start sponsor conversations, and we already have last year's sponsor roster and the published program from edition one. Registration opens in three weeks. What evidence should I actually go collect to back the value story?",
+      "expected_output": "The default-rung instrument set: returning-sponsor rate and program-content ratio computed now from records already held, plus two or three aggregate demographic fields added to the registration form before it opens, with the deep attendee survey explicitly ruled out at this effort ceiling and its promotion condition named.",
+      "files": [],
+      "expectations": [
+        "Recommends computing the returning-sponsor rate from the existing sponsor roster",
+        "Recommends computing the program-content ratio from the published program",
+        "Justifies both as near-zero effort because they only count records the organizer already holds",
+        "Recommends adding role, seniority band and company-size band fields to the registration form before it opens",
+        "Identifies registration-form demographics as the instrument that compounds edition over edition",
+        "Advises reporting registration demographics in aggregate only",
+        "Caps the added registration fields at roughly two to three, naming form friction as a real cost",
+        "Does not recommend a deep attendee survey as the move at this effort ceiling",
+        "States that the deep attendee survey tops both the value and the effort axes, so efficiency never selects it by default",
+        "Names the condition that would promote the deep survey anyway: courting an anchor or presenting-tier sponsor whose diligence asks about buying influence, or a vendor-pole event where composition claims carry the price",
+        "States the efficiency ordering of the instruments explicitly rather than leaving it implied by list order"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Someone from our own community, she founded a four-person observability startup and has spoken at our meetup twice, offered to put in a small amount to sponsor Larkmoor Days. Honestly I don't know what to tell her we'd give her for that money. She's not going to hire anybody and she's not going to get leads out of 250 people. What do I even say?",
+      "expected_output": "A community-member-sponsor statement where community goodwill leads rather than sits as filler, with the promotion condition named, goodwill described concretely as standing, existing-user relationships and market intelligence, and her alternatives treated honestly as possible complements.",
+      "files": [],
+      "expectations": [
+        "Identifies her as a community-member sponsor segment",
+        "Names community goodwill as the lead category for this segment rather than a residual or filler benefit",
+        "States the promotion condition: the sponsor is drawn from the community's own membership or strategically depends on the ecosystem",
+        "Describes goodwill value concretely as standing inside the community, maintained relationships with existing users, and market intelligence",
+        "Treats community goodwill as a value category distinct from pipeline, not a softer version of it",
+        "Names alternatives she is weighing, such as open-source project sponsorship or meetup hosting",
+        "Notes that those alternatives may complement rather than substitute, and says so honestly if this event is not her best channel",
+        "Fills the six-part statement for this one segment only",
+        "Does not recommend upselling her to a recruiting or lead-generation benefit",
+        "Does not treat the small amount as a reason to offer a thinner or vaguer value story"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Meridian Trust's early-talent team is our anchor prospect for Thornquay Conf, community-run, 300 people, 60% senior or above from last year's registration form. Our venue deposit is due in seven weeks so I need this money committed by then. Their head of early talent asked if they'd get access to a candidate database. Write me the recruiting pitch.",
+      "expected_output": "A recruiting-buyer statement that refuses a candidate database, states in the statement itself that recruiting here is conversation-based, carries the 300-attendee and 60%-senior figures as the composition proof point, re-ranks toward on-site payoffs because of the seven-week deadline, and names the sponsor's fully loaded cost.",
+      "files": [],
+      "expectations": [
+        "Identifies the recruiting buyer segment from the early-talent title",
+        "Refuses a candidate database, resume database or scanned attendee list",
+        "States explicitly inside the statement that recruiting at this event is conversation-based",
+        "Names concrete conversation mechanisms such as a staffed table or office-hours slots",
+        "Carries the 300-attendee figure and the 60% senior-or-above split through as the composition proof point",
+        "Attributes that composition figure to last edition's registration data",
+        "Re-ranks the value categories because of the seven-week revenue deadline and says which answer moved which category",
+        "Names brand exposure and community goodwill as the compounding categories deprioritized by that deadline",
+        "Names the alternatives this buyer uses today, such as career fairs or sponsored job-board placement, and why each falls short for this job",
+        "Describes the After as a self-selected shortlist that has already met the sponsor's team",
+        "Names the sponsor's fully loaded cost - fee, booth build, travel, staff days - rather than staying silent on it",
+        "Does not set a tier price for the anchor package"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Sponsor renewals at Vantry Systems Days went from 8 of 11 down to 4 of 12 this year. I want to rebuild the value proposition for our practitioner sponsors and I want to benchmark it: what's the industry standard sponsor conversion rate I should be hitting? Also just send me the whole thing in one go, I don't have time for back and forth.",
+      "expected_output": "A refusal of the industry benchmark, replaced by two or three self-set observables (first-call coverage, objection log, statement reuse) each paired with the revision it would trigger, with renewal rate attributed to the whole relationship rather than this deliverable, and the statements validated section by section rather than delivered as one block.",
+      "files": [],
+      "expectations": [
+        "Refuses to supply an industry-standard sponsor conversion rate or any external benchmark figure",
+        "States that value-proposition framing cannot be measured against an industry conversion figure",
+        "Proposes self-set observables instead, selecting two or three rather than all of them",
+        "Names first-call coverage as an observable, tied to whether sponsor calls open with questions the statement already answers",
+        "Names an objection log as an observable, with objections tagged by segment",
+        "States that a recurring objection is a defect in that segment's statement rather than a sales problem",
+        "Names statement reuse as an observable: whether the downstream documents quote the statements near-verbatim",
+        "Writes down the revision each chosen observable would trigger, before outreach starts",
+        "States that sponsor renewal rate reads on the whole relationship - delivery, report quality, relationship - and is not attributable to the value proposition alone",
+        "Declines to deliver the result as one block, requiring explicit approval section by section",
+        "Hands the finished statements and proof-point inventory off to the prospectus and rate-card steps rather than packaging or pricing them here"
+      ]
+    }
+  ],
+  "trigger_queries": [
+    {
+      "query": "Why would anyone sponsor our 300-person community-run DevOps conference? Help me articulate it before I build the deck.",
+      "should_trigger": true
+    },
+    {
+      "query": "What do sponsors actually get out of a community-run conference?",
+      "should_trigger": true
+    },
+    {
+      "query": "A dev-tools vendor asked what their DevRel team would actually get from sponsoring our hackathon - draft the value story.",
+      "should_trigger": true
+    },
+    {
+      "query": "We're courting a bank's early-talent team as an anchor sponsor. What's the recruiting value proposition, and what evidence do we need first?",
+      "should_trigger": true
+    },
+    {
+      "query": "Sponsor renewals dropped this year - rebuild the value proposition for our existing practitioner sponsors.",
+      "should_trigger": true
+    },
+    {
+      "query": "I need to explain to a sponsor why our meetup is worth their money",
+      "should_trigger": true
+    },
+    {
+      "query": "what's in it for a company that puts money into our conference",
+      "should_trigger": true
+    },
+    {
+      "query": "How do I describe sponsor benefits without promising a lead list?",
+      "should_trigger": true
+    },
+    {
+      "query": "A sponsor asked me 'why should we sponsor you' and I completely froze, help",
+      "should_trigger": true
+    },
+    {
+      "query": "Articulate what sponsors of our developer conference genuinely receive",
+      "should_trigger": true
+    },
+    {
+      "query": "Our marketing sponsor keeps asking what the payoff is. What do I tell them?",
+      "should_trigger": true
+    },
+    {
+      "query": "help me work out the different reasons companies would back our event",
+      "should_trigger": true
+    },
+    {
+      "query": "Before I write the sponsorship deck I need to know what we're actually selling",
+      "should_trigger": true
+    },
+    {
+      "query": "What motivates companies to put budget behind technical events?",
+      "should_trigger": true
+    },
+    {
+      "query": "I want one statement per type of sponsor explaining why they'd buy",
+      "should_trigger": true
+    },
+    {
+      "query": "Our hackathon has no track record yet - what can we honestly promise a sponsor?",
+      "should_trigger": true
+    },
+    {
+      "query": "Can we tell sponsors they'll get qualified leads out of our community event?",
+      "should_trigger": true
+    },
+    {
+      "query": "how should I frame the recruiting angle for a talent acquisition lead who wants to sponsor us",
+      "should_trigger": true
+    },
+    {
+      "query": "what evidence do I need before I make audience quality claims to sponsors",
+      "should_trigger": true
+    },
+    {
+      "query": "A sponsor wants to know who attends and why they should care",
+      "should_trigger": true
+    },
+    {
+      "query": "We keep pitching exposure and it isn't landing. What else is there to sell?",
+      "should_trigger": true
+    },
+    {
+      "query": "our conference sponsorship pitch is too vague, make it concrete per buyer type",
+      "should_trigger": true
+    },
+    {
+      "query": "Is community goodwill a real thing to sell to a sponsor or am I kidding myself?",
+      "should_trigger": true
+    },
+    {
+      "query": "What's the honest version of the sponsor pitch for an independent conference?",
+      "should_trigger": true
+    },
+    {
+      "query": "A founder in our community wants to chip in a bit - what would she actually be buying?",
+      "should_trigger": true
+    },
+    {
+      "query": "how do I justify sponsorship to a DevRel budget holder",
+      "should_trigger": true
+    },
+    {
+      "query": "I need proof points to back up what I'm telling sponsors",
+      "should_trigger": true
+    },
+    {
+      "query": "what should I tell companies they're getting, before I decide what to charge them",
+      "should_trigger": true
+    },
+    {
+      "query": "Why does anyone give us money for this event? I genuinely don't know how to say it.",
+      "should_trigger": true
+    },
+    {
+      "query": "Build the case for backing our annual developer summit, one audience at a time",
+      "should_trigger": true
+    },
+    {
+      "query": "Our prospect asked what makes us different from just buying developer ads. Help.",
+      "should_trigger": true
+    },
+    {
+      "query": "map out what different sponsor types want from our conference",
+      "should_trigger": true
+    },
+    {
+      "query": "a vendor wants product feedback from our attendees - is that something we can honestly offer",
+      "should_trigger": true
+    },
+    {
+      "query": "Should we promise badge scanning at our community-run conference?",
+      "should_trigger": true
+    },
+    {
+      "query": "what can a first-edition conference honestly offer a sponsor",
+      "should_trigger": true
+    },
+    {
+      "query": "help me write the why-sponsor-us part before the packages part",
+      "should_trigger": true
+    },
+    {
+      "query": "our sponsor conversations always stall on 'what do we actually get'",
+      "should_trigger": true
+    },
+    {
+      "query": "I want to stop selling logo placement and start selling something real",
+      "should_trigger": true
+    },
+    {
+      "query": "Explain the payoff of backing our meetup to a company's marketing director",
+      "should_trigger": true
+    },
+    {
+      "query": "what are the real reasons a company writes a cheque for a tech conference",
+      "should_trigger": true
+    },
+    {
+      "query": "We need a sponsor-facing story for four different buyer types at our summit",
+      "should_trigger": true
+    },
+    {
+      "query": "Build the sponsorship prospectus PDF for our conference",
+      "should_trigger": false
+    },
+    {
+      "query": "What should our gold tier cost?",
+      "should_trigger": false
+    },
+    {
+      "query": "Set up a three-tier sponsor rate card for a 500-person conference",
+      "should_trigger": false
+    },
+    {
+      "query": "Write the cold email to a sponsor prospect",
+      "should_trigger": false
+    },
+    {
+      "query": "Our sponsor said no because their budget is already locked - how do I handle that objection?",
+      "should_trigger": false
+    },
+    {
+      "query": "Track which sponsor deliverables we still owe before doors open",
+      "should_trigger": false
+    },
+    {
+      "query": "Write the post-event sponsor report",
+      "should_trigger": false
+    },
+    {
+      "query": "Draft the force-majeure clause for our sponsorship contract",
+      "should_trigger": false
+    },
+    {
+      "query": "What category exclusivity terms should the sponsorship agreement include?",
+      "should_trigger": false
+    },
+    {
+      "query": "Lay out the expo hall so attendees walk past every booth",
+      "should_trigger": false
+    },
+    {
+      "query": "What table size, power and signage height does a gold booth physically get?",
+      "should_trigger": false
+    },
+    {
+      "query": "Set up scheduled 1:1 buyer-seller meetings at our conference",
+      "should_trigger": false
+    },
+    {
+      "query": "How many booked meetings can we commit to in a sponsor package?",
+      "should_trigger": false
+    },
+    {
+      "query": "Write our conference's positioning statement against the two competing events in the region",
+      "should_trigger": false
+    },
+    {
+      "query": "Should we rename the conference?",
+      "should_trigger": false
+    },
+    {
+      "query": "Are our ticket sales on pace or should we cut scope?",
+      "should_trigger": false
+    },
+    {
+      "query": "Validate whether there's real demand for a Rust conference in Lyon",
+      "should_trigger": false
+    },
+    {
+      "query": "Plan the minimum viable first edition of our hackathon",
+      "should_trigger": false
+    },
+    {
+      "query": "What should our early-bird ticket price be?",
+      "should_trigger": false
+    },
+    {
+      "query": "Model the P&L for a 400-person conference",
+      "should_trigger": false
+    },
+    {
+      "query": "Negotiate a media partnership with a developer publication",
+      "should_trigger": false
+    },
+    {
+      "query": "Which conferences should our company sponsor next year, and at what tier?",
+      "should_trigger": false
+    },
+    {
+      "query": "Is this $15k booth actually worth it for our DevRel team?",
+      "should_trigger": false
+    },
+    {
+      "query": "Decide what our company's user conference is funded to accomplish",
+      "should_trigger": false
+    },
+    {
+      "query": "Should we run a multi-city roadshow or a single-city user conference?",
+      "should_trigger": false
+    },
+    {
+      "query": "How much cash prize should our hackathon award?",
+      "should_trigger": false
+    },
+    {
+      "query": "Design the judging rubric for our hackathon",
+      "should_trigger": false
+    },
+    {
+      "query": "Write the value proposition for our SaaS product's pricing page",
+      "should_trigger": false
+    },
+    {
+      "query": "Position our API product against three competitors",
+      "should_trigger": false
+    },
+    {
+      "query": "Craft an irresistible offer with bonuses and guarantees for our course",
+      "should_trigger": false
+    },
+    {
+      "query": "Help me fill in a value proposition canvas for our developer tool",
+      "should_trigger": false
+    },
+    {
+      "query": "Find sponsors for my YouTube channel",
+      "should_trigger": false
+    },
+    {
+      "query": "Draft a brand partnership pitch for an Instagram influencer campaign",
+      "should_trigger": false
+    },
+    {
+      "query": "What should we pay a conference keynote speaker?",
+      "should_trigger": false
+    },
+    {
+      "query": "How do we recruit more speakers to submit to our CFP?",
+      "should_trigger": false
+    },
+    {
+      "query": "Write the sponsor logo placement rules for our event website",
+      "should_trigger": false
+    },
+    {
+      "query": "Our top sponsors want a private dinner the night before - plan it",
+      "should_trigger": false
+    },
+    {
+      "query": "Write the code-of-conduct clause that lets us eject a sponsor's booth staff",
+      "should_trigger": false
+    },
+    {
+      "query": "Write the sponsors section of our event website",
+      "should_trigger": false
+    },
+    {
+      "query": "How do we lift sponsor renewal rate after the event is over?",
+      "should_trigger": false
+    },
+    {
+      "query": "How do we decide whether the conference was worth running at all?",
+      "should_trigger": false
+    }
+  ]
+}

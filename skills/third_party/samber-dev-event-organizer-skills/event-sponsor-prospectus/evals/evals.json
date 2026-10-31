@@ -1,0 +1,403 @@
+{
+  "skill_name": "event-sponsor-prospectus",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I run KubeNord, a community-run Kubernetes conference in Malmo - 350 attendees, third edition, May 2027. We already finished our sponsor value story and the rate card (Gold EUR 5,000, Silver EUR 3,000, Bronze EUR 1,800). Now I need the actual sponsorship kit PDF. Two things my co-organizer wants in it: a Gold-tier perk giving sponsors badge scanning plus the attendee list export after the event, and a line near the top saying 'we guarantee your team at least 40 qualified leads' - she says that's what closes deals. And lead with the pricing page, since that's all sponsors really look at. Can you draft the kit?",
+      "expected_output": "A section-by-section kit outline that strips both the lead-data perk and the guarantee line, keeps the supplied prices unchanged, and orders proof before price rather than opening on the tier table.",
+      "files": [],
+      "expectations": [
+        "Removes the attendee-list export and badge-scanning perk, stating that a community-run event gives out no attendee contact data",
+        "Offers aggregate audience demographics as the honest substitute for the removed lead-data perk",
+        "Refuses the 'we guarantee your team at least 40 qualified leads' line and states that no guarantee of any type belongs in the document",
+        "Refuses to lead the document with the pricing page",
+        "Section order runs cover, brand imagery, event facts, value proposition, proof, tier table, add-ons, logistics, named contacts",
+        "Places the testimonials or proof section immediately before the tier table",
+        "Within the tier table, the price row comes first",
+        "Caps the document at roughly 10-12 pages",
+        "Carries a statement of what sponsors will not get into the published document itself, not only into the drafting notes",
+        "Puts the edition year in the document title, for example 'Sponsor Information 2027'",
+        "Closes the document with named organizers and a contact email rather than a generic enquiry form",
+        "Carries the EUR 5,000 / EUR 3,000 / EUR 1,800 figures through unchanged rather than adjusting or re-deriving them"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "First edition of PyLagos, a Python conference in Lagos, 6 March 2027. We have zero photos, no testimonials, no past sponsors - nothing. All I know about the audience is that we're capping registration at 200 and it's mostly working Python developers. Sponsor outreach has to start in 12 days. Prices are already set: Gold NGN 900,000, Silver NGN 500,000, Community NGN 200,000, and we only have physical room for 4 booth tables total. Build me the sponsorship prospectus.",
+      "expected_output": "An in-page tier-table sponsor page - compressed anatomy, prices printed, a one-line audience statement, a cap row only on the booth tables - explicitly chosen over a full illustrated PDF kit because of the deadline and missing assets.",
+      "files": [],
+      "expectations": [
+        "Recommends an in-page tier-table web page rather than a full illustrated PDF kit",
+        "Names the 12-day outreach deadline and the absence of photo and testimonial assets as the reason that rung wins",
+        "Refuses to substitute stock photography of another event for real assets",
+        "The audience section is a single verified line rather than a role or industry percentage breakdown",
+        "Refuses to invent role, industry or company-size percentages",
+        "Keeps a proof element above the tier grid even in the compressed layout",
+        "Compressed layout runs facts paragraph, then value-proposition paragraph, then tier grid, then contact email",
+        "The three prices appear on the page rather than being replaced by a 'contact us for pricing' invitation",
+        "Prints a max-available row only for the genuinely real cap of 4 booth tables",
+        "Places the contact email on the same page as the tier grid",
+        "Dates the document to the 2027 edition rather than writing it as an evergreen page",
+        "Does not recommend photography or layout work the 12-day window cannot absorb"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Describing what we have: last year's sponsorship kit as a slide deck titled 'RustFest Bratislava - Sponsor Packages'. For the 2027 edition I want to just edit that same deck in place and send it out next week. The testimonials in it are from 2025 attendees, the logo wall has 11 sponsors of which 4 aren't coming back, and there's a red banner on slide 6 reading 'Only 2 Gold spots left!' left over from last February. Prices went up about 15% this year but I haven't reconciled the deck against the new rate card yet. What do I need to change?",
+      "expected_output": "A per-edition refresh that produces a new dated document rather than an in-place edit, with the stale counter, stale testimonials and departed sponsor logos removed and every printed cap re-verified.",
+      "files": [],
+      "expectations": [
+        "Produces a fresh document for the 2027 edition instead of editing the previous edition's file in place",
+        "Puts the edition year in both the document title and its filename",
+        "Archives the previous edition's document rather than overwriting it",
+        "Replaces the 2025 testimonials with quotes from the most recent edition",
+        "Removes the 4 non-returning sponsors from the logo wall",
+        "Deletes the stale 'Only 2 Gold spots left!' banner",
+        "Re-verifies every printed cap against real current inventory before the document ships",
+        "Takes the tier prices from the current rate card rather than applying the 15% uplift inside the prospectus itself",
+        "Updates the audience-evidence section with the latest registration data",
+        "Sweeps dead links and outdated dates",
+        "Delivers a reusable per-edition refresh checklist rather than only a one-off fix list",
+        "Notes that the year-over-year difference between archived editions is evidence of growth a returning sponsor can be shown"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Our tier table is a mess. ObservaConf, about 600 people, Lyon, 4th edition. Five tiers: Platinum EUR 8,000, Gold EUR 4,500, then three priced at EUR 2,500 each - one buys the lanyard, one buys the coffee cart, one buys the after-party. Sponsors keep emailing to ask what a tier actually includes and what the coffee thing costs, and it's eating my week. My designer wants to show each benefit row as a 1-to-5 star rating so it looks richer, and suggests we write '3-star premium branding package' instead of listing individual items. Only the lanyard, the coffee cart and the party are genuinely one-per-event; everything else we can sell as much of as we want. Fix the table.",
+      "expected_output": "A rebuilt tier table with the price row first, plain inclusion marks, a cap row only on the three genuinely exclusive surfaces, and those surfaces moved into named priced add-on cards.",
+      "files": [],
+      "expectations": [
+        "The price row leads the tier table",
+        "Prints a max-available row only for the lanyard, the coffee cart and the after-party, each capped at 1",
+        "Does not print an invented cap on Platinum, Gold or any other row",
+        "Rejects the 1-to-5 star rating and uses a plain mark for inclusion and a blank cell for exclusion",
+        "Reserves numeric cells for genuine quantities such as ticket counts and discount percentages",
+        "Rejects the '3-star premium branding package' label in favour of individually named perk line items",
+        "Moves the three single-exclusive surfaces out of the grid into named a-la-carte add-on cards",
+        "Each add-on card carries an icon, a name, a price and one line of description",
+        "Names each perk with a container word that signals its format instead of describing it generically",
+        "Keeps named perk items per tier within roughly 3 to 7 before readability breaks down",
+        "Places a custom-tier invitation and the contact call to action on the same page as the table rather than a page later",
+        "Treats the incoming 'what does it include / what does it cost' emails as a defect in the document rather than a sales problem"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "HackAtlantic, independently run out of a university society, 1,200 hackers over 48 hours, 6th edition. Every sponsor conversation starts with recruiting, so I want the packet to say plainly that every sponsor tier receives the resumes and contact information of all participating students. I also want a sponsor-run workshop slot on the final morning right before submissions close, and a prize track for our platinum sponsor called 'Best Vaultly-powered invoicing tool for small retailers' with a EUR 10,000 prize - our own grand prize is EUR 2,000. Write the sponsorship packet. Keep it to 2-3 pages, I read somewhere that's the rule.",
+      "expected_output": "A hackathon packet that replaces the blanket resume promise with consent-bounded, conversation-based recruiting formats, moves the workshop earlier, rebalances and broadens the sponsor prize track, and treats the page-count advice as one input to validate rather than a rule.",
+      "files": [],
+      "expectations": [
+        "Refuses to print an uncapped, unhedged promise of every participant's resume and contact information",
+        "Identifies that promise as functionally a guarantee even though the word 'guarantee' never appears in it",
+        "Requires the recruiting benefit to be bounded by participant consent or opt-in rather than delivered automatically to every tier",
+        "Offers conversation-based recruiting formats such as resume-critique office hours, a recruiter fair space, or on-site interviews in a private room as the printable alternative",
+        "Moves the sponsor workshop off the final morning to early in the event",
+        "Gives participant exhaustion before the submission deadline as the reason for moving the workshop",
+        "Broadens the over-specified prize track toward a general 'Best Use of <product>' shape that preserves hacker creativity",
+        "Flags the EUR 10,000 sponsor track against the EUR 2,000 grand prize as overshadowing the organizer's own prizes and brings the values into line",
+        "Treats the 2-3 page guidance as one real input rather than a fixed rule, and validates page count and page order with the organizer",
+        "Notes that fuller multi-page hackathon kits are also real, so neither depth is assumed by default",
+        "Slots the hackathon perks into the same tier-table and add-on structure a conference kit uses",
+        "Adds a monitored sponsor chat channel and an on-site sponsor mentor as perks that answer the package-value concern"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Building GoWest, a Go conference in Porto, about 400 people, first commercial edition (we ran it free twice). I need the sponsorship prospectus this afternoon. Do the usual Gold/Silver/Bronze, pick prices that make sense for a 400-person European conference, and write the section on why companies should sponsor us - something about brand and hiring. Fill in whatever you need to.",
+      "expected_output": "A refusal to originate prices or value claims, a route back to the rate-card and value-proposition steps, the interview questions needed before drafting, and an outline gated on those inputs arriving.",
+      "files": [],
+      "expectations": [
+        "Declines to set or estimate tier prices as part of this task",
+        "Routes the price, cap and a-la-carte rate work to the sponsorship rate-card step before any drafting",
+        "Declines to invent the 'why sponsor' value claims",
+        "Routes the per-segment value statements, the not-offered list and the proof-point inventory to the sponsor value-proposition step",
+        "States that this document presents content produced upstream and never originates prices or value claims itself",
+        "Asks whether the event sits at the community-run or vendor/foundation-run pole before deciding what the document may print",
+        "Asks which caps are genuinely real",
+        "Asks what real assets from past editions exist, such as photos, logos, testimonials or press mentions",
+        "Asks what audience data is actually verified",
+        "Asks when the first outreach must send, whether the document is a one-off or a compounding annual asset, and what the effort ceiling is",
+        "Does not output a tier table containing invented euro figures",
+        "Offers a section-by-section outline to validate once the upstream inputs arrive"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Our growth lead reviewed the sponsor page for DataDaysNantes (community-run, 500 attendees, free to attend) and sent me a list: add a 90-day risk-free money-back guarantee on sponsorship, put a countdown timer on an 'early sponsor deadline' we'd invent, add an 'only 2 Gold left' badge we rotate manually, start a waitlist for Platinum even though nobody has bought one yet, and open the deck with 'Your developer marketing budget is being wasted on ads nobody clicks.' He does this for SaaS landing pages and says it lifts conversion 30%. Apply it?",
+      "expected_output": "A point-by-point rejection of the guarantee, the invented deadline, the rotated counter and the fake waitlist, with the two honest scarcity mechanics named, and the pain-first opening replaced by an event-credibility opening.",
+      "files": [],
+      "expectations": [
+        "Rejects the 90-day money-back guarantee and states that no guarantee of any type belongs in a sponsorship prospectus",
+        "Rejects the invented early-sponsor deadline and its countdown timer",
+        "Rejects the manually rotated 'only 2 Gold left' badge as a cap that is not real",
+        "Rejects the manufactured Platinum waitlist",
+        "Names the two honest scarcity mechanics: a published capacity cap the organizer can prove, and the real edition close date",
+        "Allows marking genuinely sold-out surfaces as filled",
+        "Rejects opening the document on the sponsor's pain and opens on the event's own brand and facts instead",
+        "Warns that selling sponsor benefits harder than the attendee experience is a signal diligent sponsors are told to watch for",
+        "Spends the first half of the document on the event's own credibility before any package appears",
+        "States explicitly that general offer-construction advice pushes guarantees and that this domain rejects that advice",
+        "Declines to carry the claimed 30% conversion lift over as a reason to adopt any of the changes",
+        "Keeps a genuine published cap where one exists rather than dropping every scarcity signal from the document"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "We sent last year's sponsorship kit to 62 companies and 3 signed. My board wants to know whether the kit is the problem and is asking for the industry benchmark close rate for sponsorship decks so we can compare ourselves. Separately, roughly a third of the replies we got weren't 'no' - they were people asking what the booth power situation is, where to ship boxes, and whether there's wired internet. The kit currently lives as a PDF on a shared workspace page. What should we change?",
+      "expected_output": "A refusal to supply a benchmark close rate, two or three self-set measures with the revision each triggers, a logistics FAQ section added to the document, and the PDF relocated to the event's own domain.",
+      "files": [],
+      "expectations": [
+        "Refuses to supply an industry benchmark close rate for sponsorship prospectuses",
+        "States that prospectus quality has no published close-rate figure behind it",
+        "Selects 2-3 observable, self-set measures instead of a benchmark comparison",
+        "Defines a reply-to-ask rate and treats the incoming logistics questions as a document defect rather than a sales problem",
+        "Has the reply-to-ask questions logged by document section, through the sponsor outreach step",
+        "Includes forwardability: the document surviving being forwarded to the budget holder without the organizer on the thread",
+        "Includes a per-edition freshness check run before each edition's first send",
+        "Writes down the revision each chosen measure triggers",
+        "Adds a sponsor logistics FAQ covering booth set-up and tear-down windows, shipping address, deadlines and return pickup, electricity, WiFi, who to send, and A/V ordering",
+        "Moves the PDF onto the event's own domain and links it from the event's sponsor page",
+        "Emails the identical versioned file in outreach so every prospect reads the same document",
+        "Notes that answering the logistics questions inside the document saves a reply-to-ask exchange per sponsor"
+      ]
+    }
+  ],
+  "trigger_queries": [
+    {
+      "query": "Build the sponsorship prospectus for our developer conference",
+      "should_trigger": true
+    },
+    { "query": "I need a sponsor deck for our Kubernetes meetup", "should_trigger": true },
+    { "query": "can you write our sponsorship kit PDF?", "should_trigger": true },
+    {
+      "query": "Draft the sponsor packages page for our conference website",
+      "should_trigger": true
+    },
+    {
+      "query": "We need a sponsorship brochure for next year's edition",
+      "should_trigger": true
+    },
+    {
+      "query": "help me put together the document we send to companies who might sponsor us",
+      "should_trigger": true
+    },
+    { "query": "what should go on our sponsor page, and in what order?", "should_trigger": true },
+    {
+      "query": "Our tier table is confusing, sponsors keep asking what each level includes",
+      "should_trigger": true
+    },
+    {
+      "query": "Turn our rate card and value story into something we can actually send out",
+      "should_trigger": true
+    },
+    { "query": "sponsorship packet for our hackathon", "should_trigger": true },
+    { "query": "refresh last year's sponsor deck for the 2027 edition", "should_trigger": true },
+    { "query": "How many pages should our sponsorship kit be?", "should_trigger": true },
+    {
+      "query": "Should our sponsor page be a web page or a downloadable PDF?",
+      "should_trigger": true
+    },
+    {
+      "query": "we have prices and a pitch, now I need the thing prospects read before the call",
+      "should_trigger": true
+    },
+    {
+      "query": "write the add-on packages section for our conference sponsor kit",
+      "should_trigger": true
+    },
+    {
+      "query": "Where do the testimonials go relative to the pricing table in a sponsor deck?",
+      "should_trigger": true
+    },
+    {
+      "query": "put together a sponsor one-pager for our first-edition meetup",
+      "should_trigger": true
+    },
+    {
+      "query": "Can I print 'only 2 Gold spots left' on our sponsorship page?",
+      "should_trigger": true
+    },
+    {
+      "query": "our sponsorship PDF is from 2025 and still says 2025, what do we do",
+      "should_trigger": true
+    },
+    {
+      "query": "I want to show audience demographics to sponsors, how deep should that section go",
+      "should_trigger": true
+    },
+    {
+      "query": "design the benefits grid showing what each sponsorship level gets",
+      "should_trigger": true
+    },
+    {
+      "query": "companies keep emailing to ask what sponsoring costs - what am I doing wrong",
+      "should_trigger": true
+    },
+    {
+      "query": "Draft the document that goes out attached to our sponsor cold emails",
+      "should_trigger": true
+    },
+    { "query": "assemble our conference partner packages document", "should_trigger": true },
+    {
+      "query": "should the price be at the top or the bottom of the sponsorship table?",
+      "should_trigger": true
+    },
+    {
+      "query": "make our sponsorship offer look credible to a diligent buyer",
+      "should_trigger": true
+    },
+    { "query": "what sections does a conference sponsorship deck need", "should_trigger": true },
+    {
+      "query": "sponsor prospectus for a community-run DevOps conference",
+      "should_trigger": true
+    },
+    {
+      "query": "we're a community event, what can we honestly promise sponsors in writing?",
+      "should_trigger": true
+    },
+    { "query": "our sponsor PDF has no prices in it, is that ok", "should_trigger": true },
+    {
+      "query": "build the sponsorship page for our meetup, we have no photos yet",
+      "should_trigger": true
+    },
+    {
+      "query": "list the a-la-carte sponsor perks we should offer alongside the tiers",
+      "should_trigger": true
+    },
+    {
+      "query": "I need something a sponsor can forward to their finance person",
+      "should_trigger": true
+    },
+    {
+      "query": "write a sponsorship information document for our annual event",
+      "should_trigger": true
+    },
+    {
+      "query": "how do we present five sponsor tiers where three of them cost the same",
+      "should_trigger": true
+    },
+    {
+      "query": "our sponsorship kit needs a logistics FAQ, what questions go in it",
+      "should_trigger": true
+    },
+    {
+      "query": "what do we put on the sponsor page for a first edition with no track record",
+      "should_trigger": true
+    },
+    {
+      "query": "is it ok to guarantee sponsors a number of leads in our deck",
+      "should_trigger": true
+    },
+    { "query": "compile the sponsor-facing packet for our 48-hour hackathon", "should_trigger": true },
+    {
+      "query": "we need an annual document we can update each edition for the partners who fund us",
+      "should_trigger": true
+    },
+    {
+      "query": "how do I show which sponsor slots are limited without being sleazy",
+      "should_trigger": true
+    },
+    {
+      "query": "our partner packages doc needs a rewrite before outreach starts Monday",
+      "should_trigger": true
+    },
+    {
+      "query": "sponsorship materials for our developer summit - what's the standard structure",
+      "should_trigger": true
+    },
+    {
+      "query": "How much should we charge for a Gold sponsorship at a 500-person conference?",
+      "should_trigger": false
+    },
+    { "query": "Set the tier prices for our conference sponsorships", "should_trigger": false },
+    { "query": "Build our sponsor target list and score the prospects", "should_trigger": false },
+    { "query": "Write the cold email we send to potential sponsors", "should_trigger": false },
+    {
+      "query": "When in the sponsor's fiscal year should we start sponsor outreach?",
+      "should_trigger": false
+    },
+    {
+      "query": "Draft the sponsorship contract clauses for our lawyer to review",
+      "should_trigger": false
+    },
+    {
+      "query": "What payment terms and late fees go in a sponsor agreement?",
+      "should_trigger": false
+    },
+    {
+      "query": "Our Gold sponsor signed - build the checklist for everything we now owe them",
+      "should_trigger": false
+    },
+    {
+      "query": "Write the post-event report we send sponsors after the conference",
+      "should_trigger": false
+    },
+    { "query": "Why do companies actually sponsor developer conferences?", "should_trigger": false },
+    {
+      "query": "Work out what our sponsors genuinely get from us, segment by segment",
+      "should_trigger": false
+    },
+    { "query": "Build our event's landing page and its ticket CTA", "should_trigger": false },
+    {
+      "query": "Design the expo floor layout so attendees walk past every booth",
+      "should_trigger": false
+    },
+    {
+      "query": "What table size, power and signage does a Gold booth physically get?",
+      "should_trigger": false
+    },
+    { "query": "Build the event budget and P&L", "should_trigger": false },
+    { "query": "Set attendee ticket prices for our conference", "should_trigger": false },
+    {
+      "query": "Set up a newsletter cross-promotion swap with another conference",
+      "should_trigger": false
+    },
+    { "query": "Arrange a barter deal with a podcast to promote our event", "should_trigger": false },
+    {
+      "query": "Design the 1:1 business meeting program between sponsors and attendees",
+      "should_trigger": false
+    },
+    { "query": "Plan the attendee acquisition campaign calendar", "should_trigger": false },
+    {
+      "query": "How big should our hackathon prize pool be and how do we split it?",
+      "should_trigger": false
+    },
+    { "query": "Run a startup pitch contest inside our conference", "should_trigger": false },
+    { "query": "Get tech press to cover our conference", "should_trigger": false },
+    { "query": "Write the call for papers for our conference", "should_trigger": false },
+    { "query": "Source and vet a caterer for our event", "should_trigger": false },
+    { "query": "Find and negotiate a venue for 400 people", "should_trigger": false },
+    { "query": "Build the risk register for our conference", "should_trigger": false },
+    { "query": "Write our event's code of conduct", "should_trigger": false },
+    { "query": "Plan our first edition from zero", "should_trigger": false },
+    {
+      "query": "Write the invitation email to a speaker we want on stage",
+      "should_trigger": false
+    },
+    {
+      "query": "Decide the goal mix and budget owner for our company-run developer event",
+      "should_trigger": false
+    },
+    {
+      "query": "Which event format should we run - meetup, hackathon or conference?",
+      "should_trigger": false
+    },
+    { "query": "Lay out the session grid and avoid track clashes", "should_trigger": false },
+    { "query": "What accessibility provisions should we commit to?", "should_trigger": false },
+    { "query": "Plan our social media posts for the event campaign", "should_trigger": false },
+    { "query": "Design the badge and check-in desk flow", "should_trigger": false },
+    { "query": "Write the investor pitch deck for our seed round", "should_trigger": false },
+    { "query": "Find sponsors for my YouTube channel", "should_trigger": false },
+    {
+      "query": "Draft a sponsorship proposal for our local football club's kit sponsor",
+      "should_trigger": false
+    },
+    { "query": "Build a slide deck summarizing our Q3 results", "should_trigger": false },
+    { "query": "Write a prospecting sequence for our SaaS sales team", "should_trigger": false },
+    { "query": "Create a lead magnet PDF for our developer tool", "should_trigger": false },
+    {
+      "query": "How do we get our open-source project funded through GitHub Sponsors?",
+      "should_trigger": false
+    }
+  ]
+}
