@@ -2,7 +2,7 @@
 import { guard } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { McpClient } from "@/lib/mcp";
-import { model, provider } from "@/lib/claude";
+import { model, provider, orConfig } from "@/lib/claude";
 import { connectedEmail } from "@/lib/gmail";
 
 export const dynamic = "force-dynamic";
@@ -25,11 +25,14 @@ export async function GET(req: Request) {
     if (!r.ok) throw new Error(`${r.status}: ${j?.error?.message || JSON.stringify(j).slice(0, 200)}`);
     return `${model("anthropic")} replied`;
   });
-  out.openrouter = !process.env.OPENROUTER_API_KEY ? { ok: false, detail: "OPENROUTER_API_KEY not set (optional)" } : await check(async () => {
-    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json", "HTTP-Referer": "https://sponsordesk-blue.vercel.app", "X-Title": "SponsorDesk" }, body: JSON.stringify({ model: model("openrouter"), max_tokens: 5, messages: [{ role: "user", content: "Reply OK" }] }) });
+  const oc = orConfig();
+  out.openrouter = !oc.key ? { ok: false, detail: "KIMI_K3 / OPENROUTER_API_KEY not set" } : await check(async () => {
+    const r = await fetch(`${oc.base}/chat/completions`, { method: "POST", headers: { "Authorization": `Bearer ${oc.key}`, "Content-Type": "application/json", "HTTP-Referer": "https://sponsordesk-blue.vercel.app", "X-Title": "SponsorDesk" }, body: JSON.stringify({ model: oc.model, max_tokens: 5, messages: [{ role: "user", content: "Reply OK" }] }) });
     const j: any = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(`${r.status}: ${j?.error?.message || JSON.stringify(j).slice(0, 200)}`);
-    return `${model("openrouter")} replied`;
+    let credit = "";
+    if (oc.openrouter) { const k: any = await fetch(`${oc.base}/key`, { headers: { Authorization: `Bearer ${oc.key}` } }).then((x) => x.json()).catch(() => ({})); if (k?.data) credit = `, credit left: ${k.data.limit_remaining ?? "no limit set"}`; }
+    return `${oc.label} ${oc.model} replied (key from ${process.env.KIMI_K3 ? "KIMI_K3" : process.env.KIMI_API_KEY ? "KIMI_API_KEY" : "OPENROUTER_API_KEY"}${credit})`;
   });
   out.gemini = !process.env.GEMINI_API_KEY ? { ok: false, detail: "GEMINI_API_KEY not set (optional)" } : await check(async () => {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model("gemini")}:generateContent`, { method: "POST", headers: { "x-goog-api-key": process.env.GEMINI_API_KEY as string, "content-type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "Reply OK" }] }], generationConfig: { maxOutputTokens: 5 } }) });

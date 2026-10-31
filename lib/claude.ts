@@ -19,21 +19,31 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 }
 const sig = (o: Opts) => AbortSignal.timeout(Math.max(5000, left(o)));
 
+/** OpenAI-compatible endpoint: KIMI_K3 (an OpenRouter sk-or- key, or a Moonshot key) wins over OPENROUTER_API_KEY. Default model: Kimi K3. */
+export function orConfig() {
+  const kimi = process.env.KIMI_K3 || process.env.KIMI_API_KEY || "";
+  if (kimi) {
+    const viaOR = kimi.startsWith("sk-or-");
+    return { key: kimi, openrouter: viaOR, base: viaOR ? "https://openrouter.ai/api/v1" : (process.env.KIMI_BASE_URL || "https://api.moonshot.ai/v1"),
+      model: (viaOR ? process.env.OPENROUTER_MODEL : process.env.KIMI_MODEL) || (viaOR ? "moonshotai/kimi-k3" : "kimi-k3"), label: viaOR ? "OpenRouter" : "Moonshot" };
+  }
+  return { key: process.env.OPENROUTER_API_KEY || "", openrouter: true, base: "https://openrouter.ai/api/v1", model: process.env.OPENROUTER_MODEL || "moonshotai/kimi-k3", label: "OpenRouter" };
+}
 export function provider(): "gemini" | "anthropic" | "openrouter" {
   const p = (process.env.LLM_PROVIDER || "").toLowerCase();
   if (p === "gemini" || p === "anthropic" || p === "openrouter") return p as any;
-  if (process.env.OPENROUTER_API_KEY) return "openrouter";
+  if (orConfig().key) return "openrouter";
   if (process.env.ANTHROPIC_API_KEY) return "anthropic";
   return process.env.GEMINI_API_KEY ? "gemini" : "anthropic";
 }
 export function model(p: string = provider()) {
-  if (p === "openrouter") return process.env.OPENROUTER_MODEL || "google/gemini-2.5-pro";
+  if (p === "openrouter") return orConfig().model;
   if (p === "gemini") return process.env.GEMINI_MODEL || (process.env.SD_MODEL && !process.env.SD_MODEL.startsWith("claude") ? process.env.SD_MODEL : "gemini-3.8-flash");
   return process.env.SD_MODEL && process.env.SD_MODEL.startsWith("claude") ? process.env.SD_MODEL : "claude-sonnet-5-5";
 }
 export function hasClaude() {
   const p = provider();
-  if (p === "openrouter") return !!process.env.OPENROUTER_API_KEY;
+  if (p === "openrouter") return !!orConfig().key;
   if (p === "gemini") return !!process.env.GEMINI_API_KEY;
   return !!process.env.ANTHROPIC_API_KEY;
 }
@@ -63,7 +73,7 @@ export async function claude(opts: Opts): Promise<ClaudeResult> {
     const msg = String(e?.message || e);
     // pick a fallback with a key
     const candidates = ["openrouter", "anthropic", "gemini"].filter(p => p !== first);
-    const keys: Record<string, string | undefined> = { openrouter: process.env.OPENROUTER_API_KEY, anthropic: process.env.ANTHROPIC_API_KEY, gemini: process.env.GEMINI_API_KEY };
+    const keys: Record<string, string | undefined> = { openrouter: orConfig().key, anthropic: process.env.ANTHROPIC_API_KEY, gemini: process.env.GEMINI_API_KEY };
     // OpenRouter is the single provider when its key is set: no fallback to other accounts.
     const other = first === "openrouter" ? undefined : candidates.find(p => keys[p]);
     if (other && SWITCHABLE.test(msg) && left(opts) > 60000) {
@@ -135,8 +145,9 @@ async function anthropic(opts: Opts): Promise<ClaudeResult> {
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
 async function openrouter(opts: Opts): Promise<ClaudeResult> {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error("OPENROUTER_API_KEY is not set.");
+  const cfg = orConfig();
+  const key = cfg.key;
+  if (!key) throw new Error("No model key: set KIMI_K3 or OPENROUTER_API_KEY in Vercel.");
   let mcp: McpClient | null = null;
   const nameMap = new Map<string, string>();
   const toolDefs: any[] = [];
@@ -168,10 +179,10 @@ async function openrouter(opts: Opts): Promise<ClaudeResult> {
     // Keep the tool list once tools were used (some models reject tool messages without it); block new calls when wrapping up.
     if (toolDefs.length) { body.tools = toolDefs; if (wrapped) body.tool_choice = "none"; }
     // Live web search (OpenRouter web plugin) on the first turn, so research cites real pages.
-    if (opts.web && turn === 0) body.plugins = [{ id: "web", max_results: Math.min(opts.web, 8) }];
+    if (opts.web && turn === 0 && cfg.openrouter) body.plugins = [{ id: "web", max_results: Math.min(opts.web, 8) }];
     let res: Response;
     try {
-      res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+      res = await fetch(`${cfg.base}/chat/completions`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json", "HTTP-Referer": "https://sponsordesk-blue.vercel.app", "X-Title": "SponsorDesk" },
         body: JSON.stringify(body),
