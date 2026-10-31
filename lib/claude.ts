@@ -27,7 +27,7 @@ export function provider(): "gemini" | "anthropic" | "openrouter" {
   return process.env.GEMINI_API_KEY ? "gemini" : "anthropic";
 }
 export function model(p: string = provider()) {
-  if (p === "openrouter") return process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
+  if (p === "openrouter") return process.env.OPENROUTER_MODEL || "google/gemini-2.5-pro";
   if (p === "gemini") return process.env.GEMINI_MODEL || (process.env.SD_MODEL && !process.env.SD_MODEL.startsWith("claude") ? process.env.SD_MODEL : "gemini-3.8-flash");
   return process.env.SD_MODEL && process.env.SD_MODEL.startsWith("claude") ? process.env.SD_MODEL : "claude-sonnet-5-5";
 }
