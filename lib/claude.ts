@@ -6,8 +6,8 @@
 import { McpClient } from "./mcp";
 
 const CRUSTDATA_MCP = "https://install.crustdata.com/mcp";
-export type Source = { url: string; title?: string };
-export type ClaudeResult = { text: string; toolCalls: { name: string; input: any }[]; sources: Source[]; usage: any; stop: string };
+export type Source = { url: string; title?: string; supports?: string; verified?: boolean; how?: string };
+export type ClaudeResult = { text: string; toolCalls: { name: string; input: any }[]; sources: Source[]; usage: any; stop: string; seen?: string[] };
 export type Opts = { system: string; prompt: string; crustdata?: boolean; web?: number; maxTokens?: number; budgetMs?: number; deadline?: number };
 
 // Vercel stops a function at 300 s. Every call gets a hard deadline; tools stop early enough to leave time for the answer.
@@ -156,6 +156,7 @@ async function openrouter(opts: Opts): Promise<ClaudeResult> {
   let last: any = null;
   let text = "";
   const started = Date.now();
+  const seen = new Set<string>();
   let wrapped = false;
   for (let turn = 0; turn < 12; turn++) {
     if (left(opts) < 8000) throw new Error("The research took too long. Try again or ask for fewer companies.");
@@ -164,7 +165,10 @@ async function openrouter(opts: Opts): Promise<ClaudeResult> {
       messages.push({ role: "user", content: "Time is up. Do not call any more tools. Give your final answer now in the requested format." });
     }
     const body: any = { model: model("openrouter"), messages, max_tokens: opts.maxTokens || 8000 };
-    if (toolDefs.length && !wrapped) body.tools = toolDefs;
+    // Keep the tool list once tools were used (some models reject tool messages without it); block new calls when wrapping up.
+    if (toolDefs.length) { body.tools = toolDefs; if (wrapped) body.tool_choice = "none"; }
+    // Live web search (OpenRouter web plugin) on the first turn, so research cites real pages.
+    if (opts.web && turn === 0) body.plugins = [{ id: "web", max_results: Math.min(opts.web, 8) }];
     let res: Response;
     try {
       res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
@@ -180,6 +184,7 @@ async function openrouter(opts: Opts): Promise<ClaudeResult> {
     last = await res.json();
     const msg = last.choices?.[0]?.message;
     text = msg?.content || "";
+    for (const a of msg?.annotations || []) if (a?.type === "url_citation") { addSource(sources, a.url_citation?.url, a.url_citation?.title); seen.add(a.url_citation?.url); }
     const calls = msg?.tool_calls || [];
     if (!calls.length || !mcp || wrapped) break;
     messages.push({ role: "assistant", content: msg.content || null, tool_calls: calls });
@@ -191,12 +196,13 @@ async function openrouter(opts: Opts): Promise<ClaudeResult> {
       toolCalls.push({ name: real, input: args });
       let result: string;
       try { result = await withTimeout(mcp.call(real, args), Math.min(TOOL_CALL_MS, left(opts) - ANSWER_MS + 20000), "Crustdata call"); } catch (e: any) { result = "ERROR: " + e.message; }
+      for (const u of result.match(/https?:\/\/[^\s"'<>)\]\\,]+/g) || []) seen.add(u.replace(/[.;:]+$/, ""));
       messages.push({ role: "tool", tool_call_id: tc.id, content: result.slice(0, 9000) });
     }
     if (turn === 7 && !wrapped) { wrapped = true; messages.push({ role: "user", content: "Stop calling tools now and give your final answer in the requested format." }); }
   }
   harvestUrls(sources, text, 12);
-  return { text, toolCalls, sources, usage: last?.usage, stop: last?.choices?.[0]?.finish_reason || "" };
+  return { text, toolCalls, sources, usage: last?.usage, stop: last?.choices?.[0]?.finish_reason || "", seen: [...seen] };
 }
 
 // ---------------- Gemini ----------------

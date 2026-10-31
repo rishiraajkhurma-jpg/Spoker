@@ -1,11 +1,13 @@
 // SponsorDesk agents A0-A7, condensed from the skill pack. Every agent returns structured JSON with sources.
 import { claude, claudeJson, hasCrustdata, Source } from "./claude";
 import { fixDashes } from "./lint";
+import { verifySources, CheckedSource } from "./verify";
+export type { Source } from "./claude";
 
 export type Tier = { name: string; price_inr: number; deliverables: string };
 export type EventProfile = {
   name: string; organizer: string; dates: string; city: string; website?: string; one_line?: string;
-  audience: string; proof?: string; tiers: Tier[]; floor_inr: number; goal_inr?: number; floor_locked?: boolean;
+  audience: string; proof?: string; proof_items?: { claim: string; url: string; verified: boolean }[]; unverified_sources?: Source[]; tiers: Tier[]; floor_inr: number; goal_inr?: number; floor_locked?: boolean;
   inkind_needs?: string; models?: string[]; policies?: string; past_sponsors?: string; sources?: Source[];
   sender: { name: string; title: string; org: string; phone?: string; email?: string };
   postal_address: string;
@@ -71,29 +73,69 @@ export function withSignature(body: string, e: EventProfile) {
 }
 
 // ---------- A0: build the event brief from one line ----------
-export async function buildBrief(oneLine: string, sender: { name: string; title?: string; phone?: string; email?: string }) {
+export type BriefResult =
+  | { status: "ok"; profile: EventProfile; searches: number; verified: number }
+  | { status: "clarify"; questions: string[]; found: string; sources: CheckedSource[]; searches: number };
+
+const isBlank = (v: any) => !String(v ?? "").trim() || /^\s*(unknown|n\/?a|none|not found|not available|-)\s*\.?\s*$/i.test(String(v));
+const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+
+export async function buildBrief(oneLine: string, sender: { name: string; title?: string; phone?: string; email?: string }, answers = ""): Promise<BriefResult> {
   const system = `You are SponsorDesk A0, the packaging agent of a sponsorship broker for Indian college fests and events. ${RULES}
-Research the event (Crustdata web search and page fetch if connected, otherwise web search): official site, last edition's numbers (footfall, registrations, startups, speakers), past sponsors, flagship properties, social reach, dates and venue. Then design a sponsorship package.
-Pricing: base tiers on what this event and peer fests actually charged where you can find it (cite), otherwise on comparable Indian college fests; mark them as suggestions. Floor = about 80% of the smallest cash tier. Only include numbers you found or label them "estimate".`;
-  const prompt = `The manager typed: "${oneLine}"
+${research()}
+Step 1, identify the event. Search the web for it: official site, last edition's pages, sponsor page, press coverage, social posts. You must tie the manager's line to ONE real event (name, organiser, edition). If nothing describes it, or several different events match and you cannot tell which one is meant, set "status":"clarify" and ask 1 to 3 short, specific questions (for example: which institute, which year, the website link). Do not guess.
+Step 2, if the event is clear, fill every field from what you read:
+- audience: who attends, in plain words: age range, who they are (students, founders, professionals), which colleges or cities, and size (footfall, registrations) with the year and source domain in brackets. Age range and mix may come from the event type and its own pages: then write "typical for this kind of event". Never write "unknown".
+- past_sponsors: names with years from the sponsor page, previous edition pages, press or official social posts. If you find none, write exactly where you looked, e.g. "Searched ecell.in sponsor pages, 2025 press coverage and LinkedIn posts; no published sponsor list found."
+- proof: each published number or fact that proves reach (footfall, registrations, startups, speakers, media), with the exact page URL that shows it.
+- sources: every page you actually read and used, with the URL and what it supports.
+Pricing: base tiers on what this event and peer fests actually charged where you can find it (cite), otherwise on comparable Indian college fests; mark them as suggestions. Floor = about 80% of the smallest cash tier.`;
+  const prompt = `The manager typed: "${oneLine}"${answers ? `\nThe manager's answers to your earlier questions: "${answers}"` : ""}
 Return only:
-<json>{"name":"","organizer":"","dates":"","city":"","website":"","one_line":"one true sentence about the event",
-"audience":"facts with their source in brackets, e.g. 20,000+ footfall (ecell.in, 2026)","past_sponsors":"comma list with years if found",
-"proof":"what proof exists (reports, numbers) with sources",
+<json>{"status":"ok|clarify","questions":["only when status is clarify"],"found":"one or two lines on what you found so far",
+"name":"","organizer":"","dates":"","city":"","website":"","one_line":"one true sentence about the event",
+"audience":"age range, who they are, which colleges or cities, size with (source, year)","past_sponsors":"names with years, or where you looked",
+"proof":[{"claim":"e.g. 20,000+ footfall in 2025","url":"exact page"}],
+"sources":[{"url":"","title":"","supports":"what this page told you"}],
 "tiers":[{"name":"Title","price_inr":0,"deliverables":""},{"name":"Platinum","price_inr":0,"deliverables":""},{"name":"Gold","price_inr":0,"deliverables":""},{"name":"Silver","price_inr":0,"deliverables":""}],
 "floor_inr":0,"goal_inr":0,"pricing_basis":"one line on how prices were set",
 "inkind_needs":"what the event would otherwise pay for: food, prizes, credits, internships, travel, printing",
 "models":["${MODELS.slice(0, 8).join('","')}"],"policies":"never sell judging; resume data only with opt-in",
 "postal_address":"organiser postal address with PIN if found"}</json>`;
-  const { data, raw } = await claudeJson<any>({ system, prompt, crustdata: true, web: 8, maxTokens: 6000 });
+  const { data, raw } = await claudeJson<any>({ system, prompt, crustdata: true, web: 8, maxTokens: 7000 });
+  const proofIn: { claim: string; url: string }[] = Array.isArray(data.proof) ? data.proof.filter((p: any) => p?.url) : [];
+  const checked = await verifySources([...(Array.isArray(data.sources) ? data.sources : []), ...proofIn.map((p) => ({ url: p.url, title: p.claim })), ...raw.sources], raw.seen || [], 20);
+  const good = checked.filter((c) => c.verified);
+  const searches = raw.toolCalls.length;
+
+  // Clarify gate: no event identified, or nothing on the web backs it up and the manager has not explained it yet.
+  if (data.status === "clarify" || (!good.length && !answers)) {
+    const qs = (Array.isArray(data.questions) ? data.questions : []).map(String).filter(Boolean).slice(0, 3);
+    return {
+      status: "clarify", searches, sources: good,
+      found: String(data.found || (good.length ? "Some pages matched, but not clearly one event." : "No page on the web clearly describes this event.")),
+      questions: qs.length ? qs : ["What is the event's official website or Instagram/LinkedIn page?", "Which institute or organisation runs it, and which edition or year is this?", "Who attends (students, founders, professionals) and roughly how many?"],
+    };
+  }
+
+  const ok = (u: string) => good.some((g) => g.url === u.replace(/\/$/, "") || g.url === u);
+  const proofItems = proofIn.map((p) => ({ claim: String(p.claim || ""), url: p.url, verified: ok(p.url) }));
+  const proofText = proofItems.filter((p) => p.verified).map((p) => `${p.claim} (${host(p.url)})`).join("; ")
+    || (good.length ? `No published reach numbers found. Pages read: ${good.slice(0, 4).map((g) => host(g.url)).join(", ")}.` : "Based on the organiser's description only; no page could be verified.");
+  const looked = good.slice(0, 4).map((g) => host(g.url)).join(", ");
+  const audience = !isBlank(data.audience) ? String(data.audience) : answers ? `As described by the organiser: ${answers}` : "Audience size not published on the pages we read.";
+  const pastSponsors = !isBlank(data.past_sponsors) ? String(data.past_sponsors) : `Searched ${looked || "the event's pages and news"}; no published list of past sponsors found.`;
+
   const e: EventProfile = {
     ...data,
+    audience, past_sponsors: pastSponsors, proof: proofText, proof_items: proofItems,
     tiers: (data.tiers || []).map((t: any) => ({ name: String(t.name || ""), price_inr: Number(t.price_inr || 0), deliverables: String(t.deliverables || "") })),
     floor_inr: Number(data.floor_inr || 0), goal_inr: Number(data.goal_inr || 0), floor_locked: false,
-    sources: raw.sources.slice(0, 20),
+    sources: good, unverified_sources: checked.filter((c) => !c.verified),
     sender: { name: sender.name, title: sender.title || `Partnerships, ${data.name || "the event"}`, org: data.organizer || "", phone: sender.phone || "", email: sender.email || "" },
   };
-  return { profile: e, searches: raw.toolCalls.length };
+  delete (e as any).status; delete (e as any).questions; delete (e as any).found;
+  return { status: "ok", profile: e, searches, verified: good.length };
 }
 
 // ---------- A1: discover ----------

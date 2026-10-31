@@ -47,13 +47,18 @@ function mergeSources(signals: any[] = [], found: A.Source[] = []) {
 }
 
 // ---------- A0 ----------
-export async function runBrief(oneLine: string, sender: { name: string; title?: string; phone?: string; email?: string }) {
+export async function runBrief(oneLine: string, sender: { name: string; title?: string; phone?: string; email?: string }, answers = "", dry = false) {
   if (!oneLine.trim()) throw new Error("Describe the event in one line.");
   if (!sender?.name) throw new Error("Your name is needed for the email signature.");
-  const { profile, searches } = await A.buildBrief(oneLine, sender);
-  await saveEvent(profile);
-  await L.log("A0", null, "brief", `Researched "${profile.name}" with ${searches} web searches, ${profile.sources?.length || 0} sources. Suggested floor INR ${profile.floor_inr}, waiting for lock.`);
-  return { profile };
+  const r = await A.buildBrief(oneLine, sender, answers);
+  if (r.status === "clarify") {
+    await L.log("A0", null, "clarify", `Could not pin down the event yet (${r.searches} searches, ${r.sources.length} pages). Asked the manager ${r.questions.length} question(s).`);
+    return { clarify: { questions: r.questions, found: r.found, sources: r.sources } };
+  }
+  if (dry) return { profile: r.profile, preview: true, searches: r.searches, verified: r.verified };
+  await saveEvent(r.profile);
+  await L.log("A0", null, "brief", `Researched "${r.profile.name}": ${r.searches} searches, ${r.verified} verified sources. Suggested floor INR ${r.profile.floor_inr}, waiting for lock.`);
+  return { profile: r.profile };
 }
 export async function lockFloor(floor: number, who: string) {
   const e = await needEvent();

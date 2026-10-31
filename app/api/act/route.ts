@@ -11,7 +11,7 @@ export const POST = wrap(async (req) => {
   const origin = new URL(req.url).origin;
   switch (b.op) {
     // A0
-    case "brief": return F.runBrief(String(b.line || ""), b.sender || {});
+    case "brief": return F.runBrief(String(b.line || ""), b.sender || {}, String(b.answers || ""), b.dry === true);
     case "lock_floor": return F.lockFloor(Number(b.floor), b.approver);
     // A1 / A2
     case "discover": return F.runDiscover(Number(b.count || 8));

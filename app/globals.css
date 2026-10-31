@@ -218,3 +218,6 @@ details > summary { cursor: pointer; color: var(--indigo); font-weight: 600; fon
   .slide { page-break-after: always; border-radius: 0; margin: 0; width: 100%; }
   .doc { box-shadow: none; padding: 0; }
 }
+.clarify { border-left: 4px solid var(--warn, #c98a12); margin: 16px 0; }
+.clarify ol { margin: 10px 0 12px 20px; padding: 0; line-height: 1.6; }
+.clarify textarea { width: 100%; min-height: 84px; }

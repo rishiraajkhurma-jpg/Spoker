@@ -193,7 +193,14 @@ function Command({ data, act, busy, approver, progress, setProgress, flash, open
   const [line, setLine] = useState("");
   const [me, setMe] = useState({ name: "", title: "", phone: "", email: "" });
   const [count, setCount] = useState(8);
+  const [clarify, setClarify] = useState<Any>(null);
   const s = data.settings;
+  async function brief(l: string, sender: Any, answers = "") {
+    const r = await act("brief", { line: l, sender, answers }, answers ? "Researching again with your answers" : "Researching the event and pricing the tiers");
+    if (r?.clarify) setClarify({ ...r.clarify, line: l, sender });
+    else if (r) setClarify(null);
+    return r;
+  }
   const cos = data.companies;
 
   async function autopilot() {
@@ -219,7 +226,7 @@ function Command({ data, act, busy, approver, progress, setProgress, flash, open
           <p>One line is enough. The packaging agent researches the event on the web, finds last year's numbers and sponsors, and proposes tiers and a floor price for you to lock.</p>
           <div className="line">
             <input value={line} onChange={(x) => setLine(x.target.value)} placeholder="E-Summit 2027, IIT Bombay, Jan 2027, goal ₹40 lakh" aria-label="Event in one line" />
-            <button className="btn big" disabled={!!busy || !line || !me.name} onClick={() => act("brief", { line, sender: me }, "Researching the event and pricing the tiers")}>{busy ? "Researching..." : "Research and package"}</button>
+            <button className="btn big" disabled={!!busy || !line || !me.name} onClick={() => brief(line, me)}>{busy ? "Researching..." : "Research and package"}</button>
           </div>
           <div className="meta">
             <input value={me.name} onChange={(x) => setMe({ ...me, name: x.target.value })} placeholder="Your name (signs the emails)" aria-label="Your name" />
@@ -227,6 +234,7 @@ function Command({ data, act, busy, approver, progress, setProgress, flash, open
             <input value={me.phone} onChange={(x) => setMe({ ...me, phone: x.target.value })} placeholder="Phone for the signature" aria-label="Phone" />
           </div>
         </div>
+        {clarify && <Clarify c={clarify} busy={busy} onAnswer={(a: string) => brief(clarify.line, clarify.sender, a)} />}
         {busy && <Console data={data} />}
       </>
     );
@@ -240,7 +248,8 @@ function Command({ data, act, busy, approver, progress, setProgress, flash, open
       <Head title={e.name} sub={`${e.dates || ""}${e.city ? ", " + e.city : ""}. ${e.one_line || ""}`}>
         <button className="btn ghost" disabled={!!busy} onClick={() => api("/api/cycle", {}).then((r) => { flash(`Daily cycle: sent ${r?.send?.sent ?? 0}, new replies ${r?.replies?.found ?? 0}. ${(r?.send?.notes || []).join(" ")}`); load(); }).catch((x) => flash(x.message))}>Run daily cycle</button>
       </Head>
-      {!e.floor_locked ? <BriefCard e={e} act={act} busy={busy} approver={approver} /> : (
+      {clarify && <Clarify c={clarify} busy={busy} onAnswer={(a: string) => brief(clarify.line, clarify.sender, a)} />}
+      {!e.floor_locked ? <BriefCard e={e} act={act} busy={busy} approver={approver} brief={brief} /> : (
         <div className="composer">
           <div className="glyph" aria-hidden>₹</div>
           <h1>{cos.length ? "Send the desk after more sponsors." : "The floor is locked. Start the autopilot."}</h1>
@@ -284,19 +293,22 @@ function Command({ data, act, busy, approver, progress, setProgress, flash, open
   );
 }
 
-function BriefCard({ e, act, busy, approver }: Any) {
+function BriefCard({ e, act, busy, approver, brief }: Any) {
+  const nSrc = (e.sources || []).filter((x: Any) => x.verified !== false).length;
   const [floor, setFloor] = useState(e.floor_inr || 0);
   const [edit, setEdit] = useState<Any>(null);
   return (
     <div className="panel">
-      <div className="spread"><div><h2>A0 packaged your event. Check it, then lock the floor.</h2><p className="sub">Researched from {e.sources?.length || 0} web sources. Prices are suggestions until you lock them.</p></div>
+      <div className="spread"><div><h2>A0 packaged your event. Check it, then lock the floor.</h2><p className="sub">{nSrc > 0 ? `Researched from ${nSrc} verified web source${nSrc === 1 ? "" : "s"}. ` : ""}Prices are suggestions until you lock them.</p></div>
         <button className="btn ghost" onClick={() => setEdit(edit ? null : JSON.parse(JSON.stringify(e)))}>{edit ? "Cancel edit" : "Edit details"}</button></div>
-      <Redo e={e} act={act} busy={busy} />
+      <Redo e={e} busy={busy} brief={brief} />
       {edit ? <BriefEdit e={edit} setE={setEdit} done={() => setEdit(null)} /> : <>
         <dl className="kv">
           <dt>Audience</dt><dd>{e.audience}</dd>
-          <dt>Past sponsors</dt><dd>{e.past_sponsors || "not found"}</dd>
-          <dt>Proof</dt><dd>{e.proof || "none found"}</dd>
+          <dt>Past sponsors</dt><dd>{e.past_sponsors}</dd>
+          <dt>Proof</dt><dd>{(e.proof_items || []).some((p: Any) => p.verified)
+            ? (e.proof_items || []).filter((p: Any) => p.verified).map((p: Any, i: number) => <div key={i}>{p.claim} <a className="source" href={p.url} target="_blank" rel="noreferrer">{String(p.url).replace(/^https?:\/\/(www\.)?/, "").slice(0, 60)}</a></div>)
+            : e.proof}</dd>
           <dt>In-kind needs</dt><dd>{e.inkind_needs}</dd>
           <dt>Signature</dt><dd>{[e.sender?.name, e.sender?.title, e.sender?.org, e.postal_address].filter(Boolean).join(", ")}</dd>
         </dl>
@@ -313,12 +325,29 @@ function BriefCard({ e, act, busy, approver }: Any) {
   );
 }
 
-function Redo({ e, act, busy }: Any) {
+function Clarify({ c, busy, onAnswer }: Any) {
+  const [a, setA] = useState("");
+  return (
+    <div className="panel clarify" role="region" aria-label="A0 needs more detail">
+      <h2>A0 needs a little more before packaging this event</h2>
+      <p className="sub">{c.found}</p>
+      <ol>{(c.questions || []).map((q: string, i: number) => <li key={i}>{q}</li>)}</ol>
+      <textarea value={a} onChange={(x) => setA(x.target.value)} placeholder="Answer here: website link, institute, year, who attends..." aria-label="Your answers" />
+      <div className="row" style={{ marginTop: 10 }}>
+        <button className="btn" disabled={!!busy || !a.trim()} onClick={() => onAnswer(a.trim()).then(() => setA(""))}>{busy ? "Researching..." : "Answer and research again"}</button>
+        <span className="small muted">Nothing is packaged until the event is clear.</span>
+      </div>
+      <Sources list={c.sources} />
+    </div>
+  );
+}
+
+function Redo({ e, busy, brief }: Any) {
   const [line, setLine] = useState("");
   return (
     <div className="row" style={{ margin: "4px 0 14px" }}>
       <input value={line} onChange={(x) => setLine(x.target.value)} placeholder="Not right? Describe the event in one line and A0 researches it again" style={{ flex: 1, minWidth: 260 }} />
-      <button className="btn ghost" disabled={!!busy || !line} onClick={() => act("brief", { line, sender: e.sender || {} }, "Researching the event and pricing the tiers").then(() => setLine(""))}>{busy ? "Researching..." : "Research again"}</button>
+      <button className="btn ghost" disabled={!!busy || !line} onClick={() => brief(line, e.sender || {}).then(() => setLine(""))}>{busy ? "Researching..." : "Research again"}</button>
     </div>
   );
 }
