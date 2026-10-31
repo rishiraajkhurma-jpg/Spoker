@@ -7,7 +7,16 @@ import { McpClient } from "./mcp";
 const CRUSTDATA_MCP = "https://install.crustdata.com/mcp";
 export type Source = { url: string; title?: string };
 export type ClaudeResult = { text: string; toolCalls: { name: string; input: any }[]; sources: Source[]; usage: any; stop: string };
-export type Opts = { system: string; prompt: string; crustdata?: boolean; web?: number; maxTokens?: number; budgetMs?: number };
+export type Opts = { system: string; prompt: string; crustdata?: boolean; web?: number; maxTokens?: number; budgetMs?: number; deadline?: number };
+
+// Vercel stops a function at 300 s. Every call gets a hard deadline; tools stop early enough to leave time for the answer.
+const HARD_MS = 235000, ANSWER_MS = 75000, TOOL_CALL_MS = 60000;
+const left = (o: Opts) => (o.deadline as number) - Date.now();
+const toolTimeUp = (o: Opts, started: number) => Date.now() - started > (o.budgetMs || 170000) || left(o) < ANSWER_MS;
+function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  return Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error(what + " timed out")), Math.max(1000, ms)))]);
+}
+const sig = (o: Opts) => AbortSignal.timeout(Math.max(5000, left(o)));
 
 export function provider(): "gemini" | "anthropic" {
   const p = (process.env.LLM_PROVIDER || "").toLowerCase();
@@ -35,6 +44,7 @@ function friendlyCore(msg: string, who: string) {
   return `${who} failed.`;
 }
 export async function claude(opts: Opts): Promise<ClaudeResult> {
+  opts = { ...opts, deadline: opts.deadline || Date.now() + HARD_MS };
   const first = provider();
   const run = (p: string) => (p === "gemini" ? gemini(opts) : anthropic(opts));
   try {
@@ -43,7 +53,7 @@ export async function claude(opts: Opts): Promise<ClaudeResult> {
     const other = first === "gemini" ? "anthropic" : "gemini";
     const otherKey = other === "gemini" ? process.env.GEMINI_API_KEY : process.env.ANTHROPIC_API_KEY;
     const msg = String(e?.message || e);
-    if (otherKey && SWITCHABLE.test(msg)) {
+    if (otherKey && SWITCHABLE.test(msg) && left(opts) > 60000) {
       try { return await run(other); }
       catch (e2: any) { throw new Error(`${friendly(msg, first === "gemini" ? "Gemini" : "Claude")} Fallback also failed. ${friendly(String(e2?.message || e2), other === "gemini" ? "Gemini" : "Claude")}`); }
     }
@@ -79,7 +89,9 @@ async function anthropic(opts: Opts): Promise<ClaudeResult> {
   for (let turn = 0; turn < 8; turn++) {
     const body: any = { ...body0, model: model("anthropic"), max_tokens: opts.maxTokens || 8000, system: opts.system, messages };
     if (tools.length) body.tools = tools;
-    const res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(body) });
+    let res: Response;
+    try { res = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers, body: JSON.stringify(body), signal: sig(opts) }); }
+    catch (e: any) { throw new Error(/abort|timeout/i.test(String(e?.name) + e?.message) ? "The research took too long and was stopped before Vercel's 300 s limit. Try again, or ask for fewer companies." : String(e?.message || e)); }
     if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 500)}`);
     last = await res.json();
     for (const b of last.content || []) {
@@ -92,7 +104,7 @@ async function anthropic(opts: Opts): Promise<ClaudeResult> {
     }
     if (last.stop_reason === "pause_turn") {
       messages.push({ role: "assistant", content: last.content });
-      if (Date.now() - started > (opts.budgetMs || 200000)) {
+      if (tools.length && toolTimeUp(opts, started)) {
         messages.push({ role: "user", content: "Time is up. Do not use any more tools. Give your final answer now in the requested format, marking anything missing as unknown." });
         delete body0.mcp_servers; tools.length = 0;
         delete headers["anthropic-beta"];
@@ -127,8 +139,8 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
   let tools: any[] | undefined;
   if (opts.crustdata && hasCrustdata()) {
     mcp = new McpClient(CRUSTDATA_MCP, process.env.CRUSTDATA_API_KEY as string);
-    await mcp.init();
-    const decls = (await mcp.tools()).slice(0, 120).map((t) => {
+    await withTimeout(mcp.init(), 20000, "Crustdata connect");
+    const decls = (await withTimeout(mcp.tools(), 20000, "Crustdata tool list")).slice(0, 120).map((t) => {
       const n = safeName(t.name);
       nameMap.set(n, t.name);
       return { name: n, description: (t.description || "").slice(0, 1000), parametersJsonSchema: cleanSchema(t.inputSchema) };
@@ -143,10 +155,10 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
   const gModels = [...new Set([model("gemini"), "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"])];
   let gm = 0;
   const started = Date.now();
-  const budget = opts.budgetMs || 200000; // Vercel functions stop at 300 s
   let wrapped = false;
   for (let turn = 0; turn < 14; turn++) {
-    if (!wrapped && tools && Date.now() - started > budget) {
+    if (left(opts) < 8000) throw new Error("The research took too long and was stopped before Vercel's 300 s limit. Try again, or ask for fewer companies.");
+    if (!wrapped && tools && toolTimeUp(opts, started)) {
       wrapped = true;
       tools = undefined;
       contents.push({ role: "user", parts: [{ text: "Time is up. Do not call any more tools. Give your final answer now in the requested format, using what you have found; mark anything missing as unknown." }] });
@@ -157,10 +169,11 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
     let errText = "";
     outer: for (let mi = gm; mi < gModels.length; mi++) {
       for (let attempt = 0; attempt < 2; attempt++) {
-        res = await fetch(`${GEMINI}/${gModels[mi]}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body) });
+        try { res = await fetch(`${GEMINI}/${gModels[mi]}:generateContent`, { method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: sig(opts) }); }
+        catch (e: any) { throw new Error(/abort|timeout/i.test(String(e?.name) + e?.message) ? "The research took too long and was stopped before Vercel's 300 s limit. Try again, or ask for fewer companies." : String(e?.message || e)); }
         if (res.ok) { gm = mi; break outer; }
         errText = (await res.text()).slice(0, 500);
-        if ([500, 503].includes(res.status) && attempt === 0) { await new Promise((r) => setTimeout(r, 2500)); continue; } // busy: retry once
+        if ([500, 503].includes(res.status) && attempt === 0 && left(opts) > ANSWER_MS) { await new Promise((r) => setTimeout(r, 2500)); continue; } // busy: retry once
         break;
       }
       if (![404, 429, 500, 503].includes(res!.status)) break; // quota, busy or unknown model: try a lighter model
@@ -186,13 +199,28 @@ async function gemini(opts: Opts): Promise<ClaudeResult> {
       const real = nameMap.get(p.functionCall.name) || p.functionCall.name;
       toolCalls.push({ name: real, input: p.functionCall.args });
       let result: string;
-      try { result = await mcp.call(real, p.functionCall.args || {}); } catch (e: any) { result = "ERROR: " + e.message; }
+      try { result = await withTimeout(mcp.call(real, p.functionCall.args || {}), Math.min(TOOL_CALL_MS, left(opts) - ANSWER_MS + 20000), "Crustdata call"); } catch (e: any) { result = "ERROR: " + e.message; }
+      harvestUrls(sources, result, 6);
       responses.push({ functionResponse: { name: p.functionCall.name, response: { result: result.slice(0, 24000) } } });
     }
     contents.push({ role: "user", parts: responses });
     if (turn === 11 && !wrapped) { wrapped = true; contents.push({ role: "user", parts: [{ text: "Stop calling tools now and give your final answer in the requested format." }] }); }
   }
+  harvestUrls(sources, text, 12);
   return { text, toolCalls, sources, usage: last?.usageMetadata, stop: last?.candidates?.[0]?.finishReason || "" };
+}
+
+/** Collect source links from tool output or the answer, when the provider gives no citation metadata. */
+function harvestUrls(sources: Source[], text: string, max: number) {
+  const seen = (text || "").match(/https?:\/\/[^\s"'<>)\]\\,]+/g) || [];
+  let n = 0;
+  for (const raw of seen) {
+    const u = raw.replace(/[.;:]+$/, "");
+    if (/crustdata\.com|googleapis|gstatic|linkedin\.com\/(in|company)\/?$/i.test(u)) continue;
+    if (sources.some((x) => x.url === u)) continue;
+    addSource(sources, u, "");
+    if (++n >= max || sources.length >= 20) break;
+  }
 }
 
 /** Pull the last JSON object out of a model answer (<json> tags, ```json fences, or bare braces). */
@@ -211,10 +239,11 @@ export function extractJson<T = any>(text: string): T | null {
 }
 
 export async function claudeJson<T = any>(opts: Opts): Promise<{ data: T; raw: ClaudeResult }> {
-  const raw = await claude(opts);
+  const deadline = opts.deadline || Date.now() + HARD_MS;
+  const raw = await claude({ ...opts, deadline });
   let data = extractJson<T>(raw.text);
-  if (!data) {
-    const fix = await claude({ system: "You convert text to valid JSON. Output only the JSON object inside <json></json> tags.", prompt: `Convert this answer into the JSON the task asked for. Keep every fact and URL, invent nothing.\n\n${raw.text.slice(0, 20000)}`, maxTokens: 6000 });
+  if (!data && raw.text.trim() && Date.now() < deadline + 25000) {
+    const fix = await claude({ deadline: deadline + 50000, system: "You convert text to valid JSON. Output only the JSON object inside <json></json> tags.", prompt: `Convert this answer into the JSON the task asked for. Keep every fact and URL, invent nothing.\n\n${raw.text.slice(0, 20000)}`, maxTokens: 6000 });
     data = extractJson<T>(fix.text);
   }
   if (!data) throw new Error("The model did not return valid JSON. First 300 chars: " + raw.text.slice(0, 300));
